@@ -16,3 +16,5 @@ out/
 node_modules/
 .loop-logs/
 STOP
+__pycache__/
+.pytest_cache/

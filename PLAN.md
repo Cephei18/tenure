@@ -17,7 +17,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Accept:_ unit tests for set/get and staleness revert.
 
 ## M1 — Measurement engine (THE CORE — most impressive, build first)
-- [ ] **M1.1 Python reference model.** `sim/model.py`: holdings(range, L, sqrtP) using exact CL formulas, NAV at fair
+- [x] **M1.1 Python reference model.** `sim/model.py`: holdings(range, L, sqrtP) using exact CL formulas, NAV at fair
   price, immediate leakage, markout alpha, loss, budget update, tier. Pure Python ints / Fractions, no floats in core.
   `sim/test_model.py` with hand-checked examples (in-range, below range, above range, full range).
   _Accept:_ `python3 -m pytest sim -q` passes.
