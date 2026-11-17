@@ -36,3 +36,11 @@ seed 0x7E2A, numbers as decimal strings. Freshness test guards against stale vec
 Files: sim/gen_vectors.py, sim/test_vectors_fresh.py, sim/conftest.py, sim/README.md, test/vectors/*.json
 Tests: 40 python passing; forge 13 passing.
 Notes for human: none
+
+## 2026-11-18T06:00Z — M1.3 PositionValue library — DONE
+What: PositionValue.positionAmounts/holdings/navAt using v4-core TickMath + SqrtPriceMath + FullMath; Holdings and
+Range structs. Differential tests match Python vectors EXACTLY (0 wei) for 240 holdings + 240 NAV cases; fuzz
+cross-check vs v4-core LiquidityAmounts; rounding-direction fuzz.
+Files: src/libraries/PositionValue.sol, test/unit/PositionValue.t.sol, test/diff/{VectorReader.sol,PositionValueDiff.t.sol}
+Tests: 13 added / 26 passing. pytest 40 passing.
+Notes for human: navAt(roundUp) rounds at both nested mulDiv steps, so it can overshoot by ~sqrtP+1 wei — curator-adverse, intended.

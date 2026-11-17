@@ -24,7 +24,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [x] **M1.2 Test vectors.** `sim/gen_vectors.py` writes `test/vectors/*.json` (>= 200 random cases per function,
   realistic tick ranges, edge cases at range boundaries and extreme prices). Deterministic seed.
   _Accept:_ vectors generated and committed; generator documented in sim/README.md.
-- [ ] **M1.3 PositionValue library.** `holdings(...)` and `navAt(...)` in Solidity using v4-core math
+- [x] **M1.3 PositionValue library.** `holdings(...)` and `navAt(...)` in Solidity using v4-core math
   (SqrtPriceMath / TickMath; periphery LiquidityAmounts only if it exists in lib/). Overflow-safe NAV via nested mulDiv.
   _Accept:_ unit + fuzz tests; differential test vs JSON vectors (exact match or documented <= 1 wei rounding, always
   rounding against the curator).
