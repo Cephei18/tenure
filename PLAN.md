@@ -42,10 +42,10 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Accept:_ test passes and prints the comparison; numbers written to `docs/results/slow_bleed.csv` via vm.writeFile.
 
 ## M2 — The hook
-- [ ] **M2.1 TenureHook skeleton.** Permissions: beforeAddLiquidity, beforeRemoveLiquidity, afterSwap (+ whatever is
+- [x] **M2.1 TenureHook skeleton.** Permissions: beforeAddLiquidity, beforeRemoveLiquidity, afterSwap (+ whatever is
   needed). Address mining in tests per the v4-hook-dev skill. Vault registration per pool (owner-set for MVP).
   _Accept:_ permissions/address test runs FIRST and passes; hook deploys in test harness with a real PoolManager.
-- [ ] **M2.2 Measured sessions.** `beginRebalance` / `endRebalance` using a transient-storage session flag;
+- [x] **M2.2 Measured sessions.** `beginRebalance` / `endRebalance` using a transient-storage session flag;
   before{Add,Remove}Liquidity revert with `Tenure__NoSession` for the registered vault outside a session; other LPs
   unaffected. Holdings snapshots read independently from the PoolManager (StateLibrary) + token balances; handle
   mid-unlock deltas correctly (see skill).
