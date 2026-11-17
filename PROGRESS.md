@@ -71,3 +71,15 @@ Files: test/scenario/SlowBleed.t.sol, docs/results/slow_bleed.csv
 Tests: 1 added / 51 forge passing.
 Notes for human: the poisoned curator is modeled as re-buying token0 at fair off-pool so its inventory doesn't run
 out (keeps the bleed rate constant; makes the static-cap loss conservative rather than inflated).
+
+## 2026-11-18T09:00Z — M2.1 TenureHook skeleton + M2.2 Measured sessions — DONE (one commit; same files)
+What: TenureHook on OZ BaseHook (beforeAdd/RemoveLiquidity + afterSwap; no return-delta perms), owner-set
+registerPool(key, vault, oracle, maxOracleAge). Transient session flag per pool (REBALANCE / PRORATA).
+beginRebalance snapshots old range (liquidity read from PoolManager), vault token balances, spot and FRESH fair price
+before unlock; beforeAdd records the single new range from the PoolManager callback params; endRebalance re-reads
+the position, rejects orphaned liquidity, updates the tracked range. Pro-rata sessions may only scale the current
+range. Third-party LPs unaffected. Salt must be 0 for vault positions.
+Files: src/TenureHook.sol, test/TenureHook.t.sol, test/utils/{TenureTestBase.sol,TestActors.sol}
+Tests: 22 added / 73 passing.
+Notes for human: forge 1.8.5 clears transient storage between top-level calls inside a test, so in-tx session
+behavior is tested through single vault calls (beginAndRead/beginThen). Recorded in CLAUDE.md Learnings.
