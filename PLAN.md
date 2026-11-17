@@ -8,7 +8,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 ---
 
 ## M0 — Foundation (small, do fast)
-- [ ] **M0.1 Verify scaffold.** Confirm the repo builds from the v4-template (`forge build`, `forge test`). Remove the
+- [x] **M0.1 Verify scaffold.** Confirm the repo builds from the v4-template (`forge build`, `forge test`). Remove the
   template's example hook/tests only after the build is green. Create `src/libraries`, `src/interfaces`, `src/mocks`,
   `sim/`, `docs/`. Create `PROGRESS.md` and `BLOCKERS.md` if missing.
   _Accept:_ clean build, template tests either passing or intentionally removed, folders exist, committed.
