@@ -62,3 +62,12 @@ refill never lifts FROZEN, random-walk stickiness.
 Files: src/libraries/RiskBudget.sol, test/unit/RiskBudget.t.sol, test/diff/RiskBudgetDiff.t.sol, test/utils/TenureDefaults.sol
 Tests: 14 added / 50 forge passing; 40 pytest.
 Notes for human: test/utils/TenureDefaults.sol must stay equal to sim/model.py BudgetParams defaults.
+
+## 2026-11-18T07:45Z — M1.6 Slow-bleed proof — DONE
+What: 200 poisoned rebalances (each swaps 10% of NAV at 0.5% below fair => ~5 bps leak, under a 1%/action static
+cap). Static caps allow 200/200 and lose 951 bps. Tenure: FULL -> RESTRICTED (~action 25, mandate move cap /4) ->
+FROZEN at action 57; loss 174 bps, bounded by bMax0 + refill + one overdraw.
+Files: test/scenario/SlowBleed.t.sol, docs/results/slow_bleed.csv
+Tests: 1 added / 51 forge passing.
+Notes for human: the poisoned curator is modeled as re-buying token0 at fair off-pool so its inventory doesn't run
+out (keeps the bleed rate constant; makes the static-cap loss conservative rather than inflated).
