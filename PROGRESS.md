@@ -83,3 +83,15 @@ Files: src/TenureHook.sol, test/TenureHook.t.sol, test/utils/{TenureTestBase.sol
 Tests: 22 added / 73 passing.
 Notes for human: forge 1.8.5 clears transient storage between top-level calls inside a test, so in-tx session
 behavior is tested through single vault calls (beginAndRead/beginThen). Recorded in CLAUDE.md Learnings.
+
+## 2026-11-18T10:30Z — M2.3 Mandate enforcement — DONE
+What: Mandate{minWidth,maxWidth,maxCenterDist (vs FAIR tick),maxMoveWad,cooldown} + oracle staleness, enforced at
+endRebalance/beginRebalance; RESTRICTED doubles minWidth & cooldown and halves maxMove. "Moved" = value converted
+between tokens (|delta total token0| at fair) - re-ranging without a swap moves ~0. Timelocked
+propose/execute/cancel with events. registerPool now takes PoolSettings (oracle age, window W, maxSettleDev, mandate,
+budget params). Hook source also contains the M2.4/M2.5 logic (scoring, records, settle, afterSwap, safe mode,
+restore) - tested in the next two tasks.
+Files: src/TenureHook.sol, test/TenureHookMandate.t.sol, test/utils/{HookFixture.sol,TestActors.sol,TenureTestBase.sol}, foundry.toml
+Tests: 20 added / 93 passing.
+Notes for human: optimizer enabled (runs 200). TenureHook is 26KB without via-IR, 21KB with it: added
+[profile.deploy] via_ir=true for anvil/testnet; default profile stays non-IR for fast tests.
