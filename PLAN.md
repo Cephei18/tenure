@@ -55,7 +55,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   NAV moved, cooldown, oracle staleness. Tier-dependent limits (RESTRICTED tightens). Timelocked mandate updates
   (propose -> wait -> execute) with events.
   _Accept:_ one test per rule (pass and fail case); timelock tests.
-- [ ] **M2.4 Scoring + records.** endRebalance computes immediate leakage, charges RiskBudget, stores RebalanceRecord,
+- [x] **M2.4 Scoring + records.** endRebalance computes immediate leakage, charges RiskBudget, stores RebalanceRecord,
   emits `RebalanceScored`. `settle(id)` after W blocks computes alpha, updates budget + reputation, emits
   `MarkoutSettled`. afterSwap settles up to N due records (bounded loop, gas-tested).
   _Accept:_ tests for settle timing (too early reverts), idempotency (can't settle twice), afterSwap auto-settle,
