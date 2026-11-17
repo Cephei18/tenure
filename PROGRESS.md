@@ -29,3 +29,10 @@ Notes for human: spec choices (also in docs/MATH.md later):
      and the tier can't drop because bMax grew. While FROZEN, budget is untouched.
   3. Losses decay reputation (cumAlpha -= loss, floored at 0) before charging the budget.
   4. No refill while FROZEN (sticky).
+
+## 2026-11-18T05:30Z — M1.2 Test vectors — DONE
+What: sim/gen_vectors.py writes 6 vector files (240 cases each; budget = 12 sequences x 25 ops = 300 states),
+seed 0x7E2A, numbers as decimal strings. Freshness test guards against stale vectors.
+Files: sim/gen_vectors.py, sim/test_vectors_fresh.py, sim/conftest.py, sim/README.md, test/vectors/*.json
+Tests: 40 python passing; forge 13 passing.
+Notes for human: none

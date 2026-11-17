@@ -21,7 +21,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   price, immediate leakage, markout alpha, loss, budget update, tier. Pure Python ints / Fractions, no floats in core.
   `sim/test_model.py` with hand-checked examples (in-range, below range, above range, full range).
   _Accept:_ `python3 -m pytest sim -q` passes.
-- [ ] **M1.2 Test vectors.** `sim/gen_vectors.py` writes `test/vectors/*.json` (>= 200 random cases per function,
+- [x] **M1.2 Test vectors.** `sim/gen_vectors.py` writes `test/vectors/*.json` (>= 200 random cases per function,
   realistic tick ranges, edge cases at range boundaries and extreme prices). Deterministic seed.
   _Accept:_ vectors generated and committed; generator documented in sim/README.md.
 - [ ] **M1.3 PositionValue library.** `holdings(...)` and `navAt(...)` in Solidity using v4-core math
