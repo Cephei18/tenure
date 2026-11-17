@@ -16,3 +16,16 @@ ReferencePriceLib.readFresh (reverts Tenure__StalePrice / Tenure__InvalidPrice; 
 Files: src/interfaces/IReferencePrice.sol, src/libraries/ReferencePriceLib.sol, src/mocks/MockReferencePrice.sol, test/unit/ReferencePrice.t.sol
 Tests: 7 added / 13 passing. foundry.toml [fuzz] runs=256 with fixed seed.
 Notes for human: none
+
+## 2026-11-18T05:00Z — M1.1 Python reference model — DONE
+What: sim/model.py integer layer (exact ports of TickMath.getSqrtPriceAtTick, SqrtPriceMath amount deltas,
+FullMath mulDiv/up) + Fraction ideal layer. Holdings, NAV at fair price, leakage, markout alpha, loss/gain WAD,
+leaky-bucket budget with tiers, reputation (bMax + deposit cap).
+Files: sim/model.py, sim/test_model.py
+Tests: 39 python tests passing; forge suite unchanged (13).
+Notes for human: spec choices (also in docs/MATH.md later):
+  1. restore() lands budget at restore_wad=35% of bMax (spec's bMax/2 would be exactly 50% = FULL under the >= rule).
+  2. Positive alpha grows bMax AND budget by the same delta, so the spent deficit is unchanged (no refill by alpha),
+     and the tier can't drop because bMax grew. While FROZEN, budget is untouched.
+  3. Losses decay reputation (cumAlpha -= loss, floored at 0) before charging the budget.
+  4. No refill while FROZEN (sticky).
