@@ -36,7 +36,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   `B_max` and deposit cap from cumulative positive alpha, caps. Pure functions over a struct.
   _Accept:_ unit + fuzz: budget never exceeds B_max, never underflows (floors at 0), tier monotonic in budget,
   refill can never lift FROZEN without guardian (frozen is sticky), differential vs Python.
-- [ ] **M1.6 Slow-bleed proof (pure-library simulation).** A Foundry test that runs 200 simulated rebalances where each
+- [x] **M1.6 Slow-bleed proof (pure-library simulation).** A Foundry test that runs 200 simulated rebalances where each
   leaks a small amount (each individually within a static per-action cap) and shows: static cap allows all of them;
   RiskBudget reaches FROZEN after N actions; total loss bounded. Print a table with console.log.
   _Accept:_ test passes and prints the comparison; numbers written to `docs/results/slow_bleed.csv` via vm.writeFile.
