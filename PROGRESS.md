@@ -95,3 +95,15 @@ Files: src/TenureHook.sol, test/TenureHookMandate.t.sol, test/utils/{HookFixture
 Tests: 20 added / 93 passing.
 Notes for human: optimizer enabled (runs 200). TenureHook is 26KB without via-IR, 21KB with it: added
 [profile.deploy] via_ir=true for anvil/testnet; default profile stays non-IR for fast tests.
+
+## 2026-11-18T11:15Z — M2.4 Scoring + records — DONE
+What: endRebalance scores immediate leakage via DecisionScore, charges RiskBudget, stores RebalanceRecord, emits
+RebalanceScored. settle(id) after W blocks (TooEarly / AlreadySettled / UnknownRecord / SpotOffFair / stale oracle)
+computes markout alpha == library value on the stored record; alpha<0 charges + decays reputation, alpha>0 grows
+bMax & deposit cap without refilling the deficit. afterSwap settles <= 3 due records per swap (scan <= 6), never
+reverts the trader (stale/broken oracle, spot off fair, open vault session => skip).
+Files: test/TenureHookScoring.t.sol, snapshots/TenureHook.json
+Tests: 16 added / 109 passing. Gas: swap 117,755 (0 due) / 247,995 (1 due) / 322,432 (3 due).
+Notes for human: the poisoned-placement test is the core attack (place liquidity at manipulated spot, attacker
+arbs back): no theft tx, but negative alpha is charged. Honest LP-ing also pays a small IL charge in alpha until
+fees are counted (stretch S1); the refill rate must cover that - tune in the M4 scenario.
