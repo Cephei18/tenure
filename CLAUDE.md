@@ -82,5 +82,6 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - Vector JSON must be held in a memory string in tests (storage string => OutOfGas from SLOADs).
 - forge 1.8.5 clears transient storage between top-level calls in a test: test in-tx behavior inside ONE external call.
 - Hook reverts surface as CustomRevert.WrappedError(hook, callbackSelector, innerErr, HookCallFailed) - build expected bytes that way.
+- TenureHook exceeds 24KB without via-IR: deploy with FOUNDRY_PROFILE=deploy (via_ir). Tests use deployCodeTo (no size limit).
 - Windows: keep LF line endings (.gitattributes) or `forge fmt --check` fails on every file.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->

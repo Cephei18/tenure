@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
@@ -35,6 +36,8 @@ contract SessionVault is IUnlockCallback {
     IPoolManager public immutable pm;
     TenureHook public immutable hook;
 
+    /// @dev tickLower == tickUpper encodes a SWAP inside the session: liquidityDelta > 0 sells token0
+    ///      (zeroForOne) for |liquidityDelta| exact-in, < 0 sells token1. Otherwise a modifyLiquidity.
     struct Op {
         int24 tickLower;
         int24 tickUpper;
@@ -84,6 +87,25 @@ contract SessionVault is IUnlockCallback {
         else hook.endProRata(key);
     }
 
+    /// Safe mode: remove `liquidity` from the given (current) range to idle.
+    function safeMode(PoolKey memory key, int24 tl, int24 tu, uint128 liquidity) external {
+        hook.beginSafeMode(key);
+        if (liquidity != 0) pm.unlock(abi.encode(key, _one(tl, tu, -int256(uint256(liquidity)))));
+        hook.endSafeMode(key, liquidity);
+    }
+
+    /// Safe mode that tries to ADD (must be rejected by the hook).
+    function safeModeAdd(PoolKey memory key, int24 tl, int24 tu, uint128 liquidity) external {
+        hook.beginSafeMode(key);
+        pm.unlock(abi.encode(key, _one(tl, tu, int256(uint256(liquidity)))));
+        hook.endSafeMode(key, 0);
+    }
+
+    function _one(int24 tl, int24 tu, int256 d) internal pure returns (Op[] memory ops) {
+        ops = new Op[](1);
+        ops[0] = Op(tl, tu, d);
+    }
+
     function endOnly(PoolKey memory key) external {
         hook.endRebalance(key);
     }
@@ -92,9 +114,24 @@ contract SessionVault is IUnlockCallback {
         require(msg.sender == address(pm), "not pm");
         (PoolKey memory key, Op[] memory ops) = abi.decode(data, (PoolKey, Op[]));
         for (uint256 i; i < ops.length; ++i) {
-            (BalanceDelta d,) = pm.modifyLiquidity(
-                key, ModifyLiquidityParams(ops[i].tickLower, ops[i].tickUpper, ops[i].liquidityDelta, bytes32(0)), ""
-            );
+            BalanceDelta d;
+            if (ops[i].tickLower == ops[i].tickUpper) {
+                bool zeroForOne = ops[i].liquidityDelta > 0;
+                int256 amt = zeroForOne ? ops[i].liquidityDelta : -ops[i].liquidityDelta;
+                d = pm.swap(
+                    key,
+                    SwapParams(
+                        zeroForOne, -amt, zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                    ),
+                    ""
+                );
+            } else {
+                (d,) = pm.modifyLiquidity(
+                    key,
+                    ModifyLiquidityParams(ops[i].tickLower, ops[i].tickUpper, ops[i].liquidityDelta, bytes32(0)),
+                    ""
+                );
+            }
             pm.settleAll(key, d, address(this));
         }
         return "";

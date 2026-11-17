@@ -51,7 +51,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   mid-unlock deltas correctly (see skill).
   _Accept:_ tests: vault modify outside session reverts; inside session succeeds; third-party LP unaffected;
   session cannot be left open across transactions.
-- [ ] **M2.3 Mandate enforcement.** Range width bounds, max distance of range center from fair price, max fraction of
+- [x] **M2.3 Mandate enforcement.** Range width bounds, max distance of range center from fair price, max fraction of
   NAV moved, cooldown, oracle staleness. Tier-dependent limits (RESTRICTED tightens). Timelocked mandate updates
   (propose -> wait -> execute) with events.
   _Accept:_ one test per rule (pass and fail case); timelock tests.

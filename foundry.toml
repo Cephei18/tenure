@@ -8,6 +8,8 @@ out = "out"
 solc_version = "0.8.30"
 src = "src"
 via_ir = false
+optimizer = true
+optimizer_runs = 200
 
 [lint]
 exclude_lints = ["screaming-snake-case-immutable", "screaming-snake-case-const"]
@@ -16,3 +18,8 @@ lint_on_build = false
 [fuzz]
 runs = 256
 seed = "0x7e2a"
+
+# Size-safe build for anvil/testnet deploys (TenureHook > 24KB without IR). Run the suite under it at milestones:
+#   FOUNDRY_PROFILE=deploy forge test
+[profile.deploy]
+via_ir = true

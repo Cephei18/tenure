@@ -27,7 +27,7 @@ contract TenureHookTest is TenureTestBase {
         _deployTenureBase();
         vault = new SessionVault(poolManager, hook);
         _fund(address(vault), 1_000_000 ether);
-        hook.registerPool(key, address(vault), oracle, MAX_ORACLE_AGE);
+        hook.registerPool(key, address(vault), oracle, _settings());
     }
 
     function _wrapped(bytes4 hookSelector, bytes4 err) internal view returns (bytes memory) {
@@ -74,19 +74,19 @@ contract TenureHookTest is TenureTestBase {
         k2.fee = 500;
         vm.prank(address(0xBEEF));
         vm.expectRevert(TenureHook.Tenure__NotOwner.selector);
-        hook.registerPool(k2, address(vault), oracle, MAX_ORACLE_AGE);
+        hook.registerPool(k2, address(vault), oracle, _settings());
     }
 
     function test_register_twice_reverts() public {
         vm.expectRevert(TenureHook.Tenure__AlreadyRegistered.selector);
-        hook.registerPool(key, address(vault), oracle, MAX_ORACLE_AGE);
+        hook.registerPool(key, address(vault), oracle, _settings());
     }
 
     function test_register_wrongHook_reverts() public {
         PoolKey memory k2 = key;
         k2.hooks = IHooks(address(0));
         vm.expectRevert(TenureHook.Tenure__WrongHook.selector);
-        hook.registerPool(k2, address(vault), oracle, MAX_ORACLE_AGE);
+        hook.registerPool(k2, address(vault), oracle, _settings());
     }
 
     function test_register_emits() public {
@@ -94,8 +94,8 @@ contract TenureHookTest is TenureTestBase {
         k2.fee = 500;
         PoolId id2 = PoolId.wrap(keccak256(abi.encode(k2)));
         vm.expectEmit(true, true, false, true, address(hook));
-        emit TenureHook.PoolRegistered(id2, address(0xCAFE), address(oracle), 60);
-        hook.registerPool(k2, address(0xCAFE), oracle, 60);
+        emit TenureHook.PoolRegistered(id2, address(0xCAFE), address(oracle));
+        hook.registerPool(k2, address(0xCAFE), oracle, _settings());
     }
 
     // ============================================================================ M2.2 sessions
