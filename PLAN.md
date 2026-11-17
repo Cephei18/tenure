@@ -12,7 +12,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   template's example hook/tests only after the build is green. Create `src/libraries`, `src/interfaces`, `src/mocks`,
   `sim/`, `docs/`. Create `PROGRESS.md` and `BLOCKERS.md` if missing.
   _Accept:_ clean build, template tests either passing or intentionally removed, folders exist, committed.
-- [ ] **M0.2 Reference price.** `IReferencePrice` (returns fair `sqrtPriceX96` for a PoolKey/PoolId, plus `updatedAt`)
+- [x] **M0.2 Reference price.** `IReferencePrice` (returns fair `sqrtPriceX96` for a PoolKey/PoolId, plus `updatedAt`)
   and `MockReferencePrice` (settable per pool). Staleness check helper.
   _Accept:_ unit tests for set/get and staleness revert.
 

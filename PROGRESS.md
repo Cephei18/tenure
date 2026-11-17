@@ -9,3 +9,10 @@ hook/test/deploy script after a green build. Created src/{libraries,interfaces,m
 Files: foundry.toml (fs_permissions), .gitignore (docs/ un-ignored), .gitattributes (LF), folders.
 Tests: 0 added / 6 passing (template EasyPosm tests). `forge fmt --check` clean.
 Notes for human: template README moved to docs/TEMPLATE_README.md. Repo is LF-only via .gitattributes.
+
+## 2026-11-18T04:20Z — M0.2 Reference price — DONE
+What: IReferencePrice (fair sqrtPriceX96 + updatedAt per PoolId), MockReferencePrice (settable, emits event),
+ReferencePriceLib.readFresh (reverts Tenure__StalePrice / Tenure__InvalidPrice; rejects future timestamps).
+Files: src/interfaces/IReferencePrice.sol, src/libraries/ReferencePriceLib.sol, src/mocks/MockReferencePrice.sol, test/unit/ReferencePrice.t.sol
+Tests: 7 added / 13 passing. foundry.toml [fuzz] runs=256 with fixed seed.
+Notes for human: none

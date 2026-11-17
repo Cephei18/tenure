@@ -12,3 +12,7 @@ via_ir = false
 [lint]
 exclude_lints = ["screaming-snake-case-immutable", "screaming-snake-case-const"]
 lint_on_build = false
+
+[fuzz]
+runs = 256
+seed = "0x7e2a"
