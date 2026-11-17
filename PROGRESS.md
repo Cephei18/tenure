@@ -44,3 +44,12 @@ cross-check vs v4-core LiquidityAmounts; rounding-direction fuzz.
 Files: src/libraries/PositionValue.sol, test/unit/PositionValue.t.sol, test/diff/{VectorReader.sol,PositionValueDiff.t.sol}
 Tests: 13 added / 26 passing. pytest 40 passing.
 Notes for human: navAt(roundUp) rounds at both nested mulDiv steps, so it can overshoot by ~sqrtP+1 wei — curator-adverse, intended.
+
+## 2026-11-18T06:45Z — M1.4 DecisionScore library — DONE
+What: immediateLeakage (from raw range/idle/spot snapshots; returns NAV_before), markoutAlpha, lossWad (ceil),
+gainWad (floor). Exact no-op short-circuit => doing nothing scores exactly 0 (mirrored in model.py score_leakage /
+markout_alpha; vectors include 8 no-op cases each). Leakage vectors now carry spotBefore/spotAfter separately.
+Files: src/libraries/DecisionScore.sol, test/unit/DecisionScore.t.sol, test/diff/DecisionScoreDiff.t.sol, sim/model.py, sim/gen_vectors.py, test/vectors/*
+Tests: 10 added / 36 forge passing; 40 pytest passing. Diff tests exact (0 wei) on 720 cases; mutation check
+(flipping one rounding flag) makes test_diff_alpha fail as expected.
+Notes for human: property (c) is checked as "leakage FRACTION of NAV is invariant under token-order flip".

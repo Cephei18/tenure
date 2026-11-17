@@ -28,7 +28,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   (SqrtPriceMath / TickMath; periphery LiquidityAmounts only if it exists in lib/). Overflow-safe NAV via nested mulDiv.
   _Accept:_ unit + fuzz tests; differential test vs JSON vectors (exact match or documented <= 1 wei rounding, always
   rounding against the curator).
-- [ ] **M1.4 DecisionScore library.** `immediateLeakage(...)`, `markoutAlpha(...)`, `lossFraction(...)` as WAD of NAV.
+- [x] **M1.4 DecisionScore library.** `immediateLeakage(...)`, `markoutAlpha(...)`, `lossFraction(...)` as WAD of NAV.
   _Accept:_ differential tests vs vectors; fuzz property tests: (a) doing nothing scores zero leakage and zero alpha;
   (b) a rebalance at fair spot with no swap has ~0 leakage; (c) leakage is invariant to which token denominates
   holdings order (token0/token1 swap symmetry check where applicable).

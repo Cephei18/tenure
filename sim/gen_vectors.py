@@ -25,7 +25,6 @@ from model import (  # noqa: E402
     deposit_cap,
     gain_wad,
     holdings,
-    immediate_leakage,
     init_state,
     loss_wad,
     markout_alpha,
@@ -34,6 +33,7 @@ from model import (  # noqa: E402
     nav,
     refill,
     restore,
+    score_leakage,
     sqrt_price_at_tick,
 )
 
@@ -134,33 +134,37 @@ def gen_nav(rng):
 
 def gen_leakage(rng):
     cases = []
-    for _ in range(N):
+    for i in range(N):
         t = rng.randrange(-200_000, 200_000)
         spot = sqrt_price_at_tick(t) + rng.randrange(0, 10**6)
+        # spot after the session: usually unchanged, sometimes moved (vault swapped / was sandwiched)
+        spot_after = spot if rng.random() < 0.6 else sqrt_price_at_tick(t + rng.randrange(-300, 300))
         # fair is within +-5% (+-~500 ticks) of spot, or equal
         fair = spot if rng.random() < 0.2 else sqrt_price_at_tick(t + rng.randrange(-500, 500))
         old = Position(*rand_range(rng, near=t), rand_liq(rng, huge_ok=False))
         new = Position(*rand_range(rng, near=t + rng.randrange(-1000, 1000)), rand_liq(rng, huge_ok=False))
         io = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
         inew = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
-        hb = holdings(old, io[0], io[1], spot, True)
-        ha = holdings(new, inew[0], inew[1], spot, False)
-        nav_before = nav(hb, fair, True)
-        leak = immediate_leakage(hb, ha, fair)
+        if i < 8:  # exact no-ops must score 0
+            new, inew, spot_after = old, io, spot
+        leak, nav_before = score_leakage(old, io, spot, new, inew, spot_after, fair)
         cases.append({"old": pos_json(old), "new": pos_json(new), "idleOld0": s(io[0]), "idleOld1": s(io[1]),
-                      "idleNew0": s(inew[0]), "idleNew1": s(inew[1]), "sqrtSpot": s(spot), "sqrtFair": s(fair),
-                      "navBefore": s(nav_before), "leakage": s(leak)})
+                      "idleNew0": s(inew[0]), "idleNew1": s(inew[1]), "sqrtSpot": s(spot),
+                      "sqrtSpotAfter": s(spot_after), "sqrtFair": s(fair), "navBefore": s(nav_before),
+                      "leakage": s(leak)})
     return cases
 
 
 def gen_alpha(rng):
     cases = []
-    for _ in range(N):
+    for i in range(N):
         t = rng.randrange(-200_000, 200_000)
         old = Position(*rand_range(rng, near=t), rand_liq(rng, huge_ok=False))
         new = Position(*rand_range(rng, near=t + rng.randrange(-1000, 1000)), rand_liq(rng, huge_ok=False))
         io = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
         inew = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
+        if i < 8:  # exact no-ops must score 0
+            new, inew = old, io
         t_end = t + rng.randrange(-3000, 3000)
         s_t = sqrt_price_at_tick(t_end) + rng.randrange(0, 10**6)
         fair_t = s_t if rng.random() < 0.3 else sqrt_price_at_tick(t_end + rng.randrange(-500, 500))
