@@ -53,3 +53,12 @@ Files: src/libraries/DecisionScore.sol, test/unit/DecisionScore.t.sol, test/diff
 Tests: 10 added / 36 forge passing; 40 pytest passing. Diff tests exact (0 wei) on 720 cases; mutation check
 (flipping one rounding flag) makes test_diff_alpha fail as expected.
 Notes for human: property (c) is checked as "leakage FRACTION of NAV is invariant under token-order flip".
+
+## 2026-11-18T07:15Z — M1.5 RiskBudget library — DONE
+What: RiskBudget (Tier enum, BudgetParams, BudgetState): validate, init, tierFor, bMaxFor, depositCap, refill,
+charge, credit, restore. Differential test replays 12x25 op sequences from budget.json and checks the full state
+after all 300 ops (all tiers + restore covered). Fuzz: budget<=bMax, floor at 0, bMax bounds, tier monotonic,
+refill never lifts FROZEN, random-walk stickiness.
+Files: src/libraries/RiskBudget.sol, test/unit/RiskBudget.t.sol, test/diff/RiskBudgetDiff.t.sol, test/utils/TenureDefaults.sol
+Tests: 14 added / 50 forge passing; 40 pytest.
+Notes for human: test/utils/TenureDefaults.sol must stay equal to sim/model.py BudgetParams defaults.

@@ -32,7 +32,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Accept:_ differential tests vs vectors; fuzz property tests: (a) doing nothing scores zero leakage and zero alpha;
   (b) a rebalance at fair spot with no swap has ~0 leakage; (c) leakage is invariant to which token denominates
   holdings order (token0/token1 swap symmetry check where applicable).
-- [ ] **M1.5 RiskBudget library.** Leaky bucket with refill rate, `B_max`, tier thresholds, reputation growth of
+- [x] **M1.5 RiskBudget library.** Leaky bucket with refill rate, `B_max`, tier thresholds, reputation growth of
   `B_max` and deposit cap from cumulative positive alpha, caps. Pure functions over a struct.
   _Accept:_ unit + fuzz: budget never exceeds B_max, never underflows (floors at 0), tier monotonic in budget,
   refill can never lift FROZEN without guardian (frozen is sticky), differential vs Python.
