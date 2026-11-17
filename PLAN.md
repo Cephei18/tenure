@@ -60,7 +60,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   `MarkoutSettled`. afterSwap settles up to N due records (bounded loop, gas-tested).
   _Accept:_ tests for settle timing (too early reverts), idempotency (can't settle twice), afterSwap auto-settle,
   gas snapshot for afterSwap with 0/1/N due records.
-- [ ] **M2.5 Freeze + safe mode.** FROZEN blocks curator rebalances except `enterSafeMode` (full-range or idle).
+- [x] **M2.5 Freeze + safe mode.** FROZEN blocks curator rebalances except `enterSafeMode` (full-range or idle).
   Guardian `restore()` after a timelock. Events.
   _Accept:_ tests for each transition FULL->RESTRICTED->FROZEN->restored.
 

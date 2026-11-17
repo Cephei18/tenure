@@ -37,7 +37,7 @@ contract TenureHookScoringTest is HookFixture {
         assertEq(r.oldRange.liquidity, 0);
         assertEq(r.idleOld.amount0, VAULT_FUNDS);
         assertEq(r.navBefore, 200_000 ether);
-        assertEq(r.blockNumber, block.number);
+        assertEq(r.blockNumber, vm.getBlockNumber());
         assertFalse(r.settled);
         assertEq(hook.recordCount(poolId), 1);
     }
@@ -58,7 +58,7 @@ contract TenureHookScoringTest is HookFixture {
     // ================================================================ settle(): timing, idempotency, errors
     function test_settle_tooEarly_reverts() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        uint256 due = block.number + WINDOW;
+        uint256 due = vm.getBlockNumber() + WINDOW;
         vm.roll(due - 1);
         vm.expectRevert(abi.encodeWithSelector(TenureHook.Tenure__TooEarly.selector, due));
         hook.settle(poolId, 0);
@@ -66,7 +66,7 @@ contract TenureHookScoringTest is HookFixture {
 
     function test_settle_atDue_thenIdempotent() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         hook.settle(poolId, 0);
         assertTrue(hook.recordOf(poolId, 0).settled);
         assertEq(hook.settlePointer(poolId), 1);
@@ -81,7 +81,7 @@ contract TenureHookScoringTest is HookFixture {
 
     function test_settle_spotOffFair_reverts() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         _pushSpotTo(-300);
         vm.expectRevert(abi.encodeWithSelector(TenureHook.Tenure__SpotOffFair.selector, 300, 100));
         hook.settle(poolId, 0);
@@ -89,9 +89,9 @@ contract TenureHookScoringTest is HookFixture {
 
     function test_settle_staleOracle_reverts() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         (uint160 f,) = oracle.getSqrtPriceX96(poolId);
-        oracle.setPriceAt(poolId, f, block.timestamp - MAX_ORACLE_AGE - 1);
+        oracle.setPriceAt(poolId, f, vm.getBlockTimestamp() - MAX_ORACLE_AGE - 1);
         vm.expectPartialRevert(ReferencePriceLib.Tenure__StalePrice.selector);
         hook.settle(poolId, 0);
     }
@@ -104,7 +104,7 @@ contract TenureHookScoringTest is HookFixture {
         _rebalance(_ops1(-900, -300, int128(L))); // curator "follows the market" (within mandate: center 600 <= 3000)
         _pushSpotTo(0); // attacker arbitrages back to fair, buying the vault's token0 cheap
 
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         BudgetState memory b0 = hook.budgetOf(poolId);
         int256 expected = _expectedAlpha(0);
         vm.recordLogs();
@@ -124,12 +124,12 @@ contract TenureHookScoringTest is HookFixture {
     /// but the budget deficit is NOT refilled.
     function test_goodExit_positiveAlpha_growsReputationOnly() public {
         _rebalance(_ops1(-600, 600, int128(L))); // record 0
-        vm.roll(block.number + 10);
+        vm.roll(vm.getBlockNumber() + 10);
         _rebalance(_ops1(-600, 600, -int128(L))); // record 1: exit to idle
         // the market then moves ~5% up (fair and spot)
         oracle.setPrice(poolId, _sqrt(500));
         _pushSpotTo(500);
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
 
         BudgetState memory b0 = hook.budgetOf(poolId);
         uint256 cap0 = hook.depositCap(poolId);
@@ -147,7 +147,7 @@ contract TenureHookScoringTest is HookFixture {
     // ================================================================ afterSwap auto-settle
     function test_afterSwap_autoSettlesDueRecord() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         vm.expectEmit(true, true, false, false, address(hook));
         emit TenureHook.MarkoutSettled(poolId, 0, 0, 0, 0, 0, 0, Tier.FULL);
         _smallSwap();
@@ -157,29 +157,29 @@ contract TenureHookScoringTest is HookFixture {
 
     function test_afterSwap_notDue_noop() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW - 1);
+        vm.roll(vm.getBlockNumber() + WINDOW - 1);
         _smallSwap();
         assertFalse(hook.recordOf(poolId, 0).settled);
     }
 
     function test_afterSwap_staleOracle_skipsWithoutReverting() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
-        vm.warp(block.timestamp + MAX_ORACLE_AGE + 1);
+        vm.roll(vm.getBlockNumber() + WINDOW);
+        vm.warp(vm.getBlockTimestamp() + MAX_ORACLE_AGE + 1);
         _smallSwap(); // must not revert the trader's swap
         assertFalse(hook.recordOf(poolId, 0).settled);
     }
 
     function test_afterSwap_spotOffFair_skips() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         _pushSpotTo(-300); // this swap itself triggers afterSwap with spot 300 ticks off fair
         assertFalse(hook.recordOf(poolId, 0).settled);
     }
 
     function test_afterSwap_boundedPerSwap() public {
         _makeRecords(5);
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         _smallSwap();
         assertEq(hook.settlePointer(poolId), 3, "settles at most MAX_AUTO_SETTLE per swap");
         assertFalse(hook.recordOf(poolId, 3).settled);
@@ -190,7 +190,7 @@ contract TenureHookScoringTest is HookFixture {
 
     function test_afterSwap_skipsManuallySettled() public {
         _makeRecords(2);
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         hook.settle(poolId, 1); // out of order: pointer stays at 0
         assertEq(hook.settlePointer(poolId), 0);
         _smallSwap();
@@ -204,11 +204,11 @@ contract TenureHookScoringTest is HookFixture {
         uint256 g0 = _gasOfSmallSwap("afterSwap_0_due");
 
         _makeRecords(1);
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         uint256 g1 = _gasOfSmallSwap("afterSwap_1_due");
 
         _makeRecords(3);
-        vm.roll(block.number + WINDOW);
+        vm.roll(vm.getBlockNumber() + WINDOW);
         uint256 g3 = _gasOfSmallSwap("afterSwap_3_due");
 
         console2.log("swap gas, 0 due records:", g0);
@@ -229,7 +229,7 @@ contract TenureHookScoringTest is HookFixture {
     }
 
     function _gasOfSmallSwap(string memory name) internal returns (uint256 g) {
-        bool zf1 = (block.number % 2) == 0;
+        bool zf1 = (vm.getBlockNumber() % 2) == 0;
         swapper.swapTo(key, zf1, 1 ether, zf1 ? _sqrt(-100) : _sqrt(100));
         g = vm.snapshotGasLastCall("TenureHook", name);
     }
@@ -237,7 +237,7 @@ contract TenureHookScoringTest is HookFixture {
     /// n cheap re-ranges at fair, alternating ranges, respecting the cooldown.
     function _makeRecords(uint256 n) internal {
         for (uint256 i; i < n; ++i) {
-            vm.roll(block.number + 10);
+            vm.roll(vm.getBlockNumber() + 10);
             uint256 c = hook.recordCount(poolId);
             if (c % 2 == 0) {
                 if (hook.currentRange(poolId).liquidity == 0) _rebalance(_ops1(-600, 600, int128(L)));

@@ -71,7 +71,7 @@ contract TenureHookMandateTest is HookFixture {
     /// Re-ranging without swapping converts nothing: moving the whole position is not "moved".
     function test_moved_rerangeWithoutSwapIsZero() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + 10);
+        vm.roll(vm.getBlockNumber() + 10);
         vm.recordLogs();
         _rebalance(_ops2(-600, 600, -int128(L), -1200, 0, int128(L / 2)));
         (,,,, uint256 movedW,,) = _lastScore();
@@ -82,22 +82,22 @@ contract TenureHookMandateTest is HookFixture {
     // ---------------------------------------------------------------- cooldown
     function test_cooldown_reverts_thenOk() public {
         _rebalance(_ops1(-600, 600, int128(L)));
-        uint256 last = block.number;
-        vm.roll(block.number + 9);
+        uint256 last = vm.getBlockNumber();
+        vm.roll(vm.getBlockNumber() + 9);
         vm.expectRevert(abi.encodeWithSelector(TenureHook.Tenure__Cooldown.selector, last + 10));
         _rebalance(_ops1(-600, 600, int128(L)));
-        vm.roll(block.number + 1);
+        vm.roll(vm.getBlockNumber() + 1);
         _rebalance(_ops1(-600, 600, int128(L)));
     }
 
     // ---------------------------------------------------------------- oracle staleness
     function test_oracle_freshAtBoundary_ok() public {
-        oracle.setPriceAt(poolId, Constants.SQRT_PRICE_1_1, block.timestamp - MAX_ORACLE_AGE);
+        oracle.setPriceAt(poolId, Constants.SQRT_PRICE_1_1, vm.getBlockTimestamp() - MAX_ORACLE_AGE);
         _rebalance(_ops1(-600, 600, int128(L)));
     }
 
     function test_oracle_stale_reverts() public {
-        uint256 at = block.timestamp - MAX_ORACLE_AGE - 1;
+        uint256 at = vm.getBlockTimestamp() - MAX_ORACLE_AGE - 1;
         oracle.setPriceAt(poolId, Constants.SQRT_PRICE_1_1, at);
         vm.expectRevert(abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, at, MAX_ORACLE_AGE));
         _rebalance(_ops1(-600, 600, int128(L)));
@@ -106,7 +106,7 @@ contract TenureHookMandateTest is HookFixture {
     // ---------------------------------------------------------------- RESTRICTED tightens
     function test_restricted_doublesMinWidth() public {
         _leakUntil(Tier.RESTRICTED, 2000 ether);
-        vm.roll(block.number + 20);
+        vm.roll(vm.getBlockNumber() + 20);
         vm.expectRevert(abi.encodeWithSelector(TenureHook.Tenure__RangeTooNarrow.selector, 120, 240));
         _rebalance(_ops1(-60, 60, int128(L)));
         _rebalance(_ops1(-120, 120, int128(L))); // 240 ok
@@ -114,7 +114,7 @@ contract TenureHookMandateTest is HookFixture {
 
     function test_restricted_halvesMaxMove() public {
         _leakUntil(Tier.RESTRICTED, 2000 ether);
-        vm.roll(block.number + 20);
+        vm.roll(vm.getBlockNumber() + 20);
         SessionVault.Op[] memory ops = new SessionVault.Op[](1);
         ops[0] = _swapOp(true, 30_000 ether); // ~15% of NAV: fine in FULL (20%), too much in RESTRICTED (10%)
         vm.expectPartialRevert(TenureHook.Tenure__MovedTooMuch.selector);
@@ -140,7 +140,7 @@ contract TenureHookMandateTest is HookFixture {
 
     function test_mandate_timelock_flow() public {
         Mandate memory m = _newMandate();
-        uint256 eta = block.timestamp + MANDATE_DELAY;
+        uint256 eta = vm.getBlockTimestamp() + MANDATE_DELAY;
         vm.expectEmit(true, false, false, true, address(hook));
         emit TenureHook.MandateProposed(poolId, m, eta);
         hook.proposeMandate(poolId, m);
@@ -158,7 +158,7 @@ contract TenureHookMandateTest is HookFixture {
         hook.executeMandate(poolId); // anyone can execute
         assertEq(hook.settingsOf(poolId).mandate.minWidth, 600);
 
-        vm.roll(block.number + 10);
+        vm.roll(vm.getBlockNumber() + 10);
         vm.expectRevert(abi.encodeWithSelector(TenureHook.Tenure__RangeTooNarrow.selector, 120, 600));
         _rebalance(_ops2(-60, 60, -int128(L), -60, 60, int128(L)));
     }
@@ -175,7 +175,7 @@ contract TenureHookMandateTest is HookFixture {
         vm.expectEmit(true, false, false, true, address(hook));
         emit TenureHook.MandateCancelled(poolId);
         hook.cancelMandate(poolId);
-        vm.warp(block.timestamp + MANDATE_DELAY);
+        vm.warp(vm.getBlockTimestamp() + MANDATE_DELAY);
         vm.expectRevert(TenureHook.Tenure__NoPendingChange.selector);
         hook.executeMandate(poolId);
     }

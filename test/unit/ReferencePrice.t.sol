@@ -30,30 +30,34 @@ contract ReferencePriceTest is Test {
 
     function test_setGet() public {
         vm.expectEmit(true, false, false, true);
-        emit MockReferencePrice.ReferencePriceSet(ID, P, block.timestamp);
+        emit MockReferencePrice.ReferencePriceSet(ID, P, vm.getBlockTimestamp());
         oracle.setPrice(ID, P);
         (uint160 s, uint256 t) = oracle.getSqrtPriceX96(ID);
         assertEq(s, P);
-        assertEq(t, block.timestamp);
+        assertEq(t, vm.getBlockTimestamp());
         (s, t) = oracle.getSqrtPriceX96(OTHER);
         assertEq(s, 0, "per-pool isolation");
         assertEq(t, 0);
     }
 
     function test_readFresh_ok_atBoundary() public {
-        oracle.setPriceAt(ID, P, block.timestamp - 60);
+        oracle.setPriceAt(ID, P, vm.getBlockTimestamp() - 60);
         assertEq(reader.read(oracle, ID, 60), P);
     }
 
     function test_readFresh_stale_reverts() public {
-        oracle.setPriceAt(ID, P, block.timestamp - 61);
-        vm.expectRevert(abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, block.timestamp - 61, 60));
+        oracle.setPriceAt(ID, P, vm.getBlockTimestamp() - 61);
+        vm.expectRevert(
+            abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, vm.getBlockTimestamp() - 61, 60)
+        );
         reader.read(oracle, ID, 60);
     }
 
     function test_readFresh_future_reverts() public {
-        oracle.setPriceAt(ID, P, block.timestamp + 1);
-        vm.expectRevert(abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, block.timestamp + 1, 60));
+        oracle.setPriceAt(ID, P, vm.getBlockTimestamp() + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, vm.getBlockTimestamp() + 1, 60)
+        );
         reader.read(oracle, ID, 60);
     }
 
@@ -73,10 +77,12 @@ contract ReferencePriceTest is Test {
     function testFuzz_staleness(uint256 age, uint256 maxAge) public {
         maxAge = bound(maxAge, 1, 1 days);
         age = bound(age, 0, 2 days);
-        oracle.setPriceAt(ID, P, block.timestamp - age);
+        oracle.setPriceAt(ID, P, vm.getBlockTimestamp() - age);
         if (age > maxAge) {
             vm.expectRevert(
-                abi.encodeWithSelector(ReferencePriceLib.Tenure__StalePrice.selector, block.timestamp - age, maxAge)
+                abi.encodeWithSelector(
+                    ReferencePriceLib.Tenure__StalePrice.selector, vm.getBlockTimestamp() - age, maxAge
+                )
             );
         }
         reader.read(oracle, ID, maxAge);

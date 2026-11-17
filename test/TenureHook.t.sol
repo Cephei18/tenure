@@ -156,7 +156,7 @@ contract TenureHookTest is TenureTestBase {
     function test_thirdPartyLP_unaffected() public {
         // a normal LP (sender = PositionManager) adds and removes freely with no session
         (uint256 tokenId,) = _thirdPartyLiquidity();
-        positionManager.decreaseLiquidity(tokenId, 1e18, 0, 0, address(this), block.timestamp, "");
+        positionManager.decreaseLiquidity(tokenId, 1e18, 0, 0, address(this), vm.getBlockTimestamp(), "");
     }
 
     function test_onlyVaultCanOpenSessions() public {
@@ -205,10 +205,12 @@ contract TenureHookTest is TenureTestBase {
     }
 
     function test_staleOracle_blocksSession() public {
-        oracle.setPriceAt(poolId, Constants.SQRT_PRICE_1_1, block.timestamp - MAX_ORACLE_AGE - 1);
+        oracle.setPriceAt(poolId, Constants.SQRT_PRICE_1_1, vm.getBlockTimestamp() - MAX_ORACLE_AGE - 1);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ReferencePriceLib.Tenure__StalePrice.selector, block.timestamp - MAX_ORACLE_AGE - 1, MAX_ORACLE_AGE
+                ReferencePriceLib.Tenure__StalePrice.selector,
+                vm.getBlockTimestamp() - MAX_ORACLE_AGE - 1,
+                MAX_ORACLE_AGE
             )
         );
         vault.rebalance(key, _ops1(-600, 600, 1e18));
@@ -225,7 +227,7 @@ contract TenureHookTest is TenureTestBase {
     function _thirdPartyLiquidity() internal returns (uint256 tokenId, uint128 liq) {
         liq = 100e18;
         (tokenId,) = positionManager.mint(
-            key, -6000, 6000, liq, type(uint256).max, type(uint256).max, address(this), block.timestamp, ""
+            key, -6000, 6000, liq, type(uint256).max, type(uint256).max, address(this), vm.getBlockTimestamp(), ""
         );
     }
 }
