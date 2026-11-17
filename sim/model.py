@@ -177,10 +177,33 @@ def immediate_leakage(h_before_up: tuple[int, int], h_after_down: tuple[int, int
     return nav(h_before_up, s_fair, True) - nav(h_after_down, s_fair, False)
 
 
+def score_leakage(
+    old: Position,
+    idle_old: tuple[int, int],
+    s_before: int,
+    new: Position,
+    idle_new: tuple[int, int],
+    s_after: int,
+    s_fair: int,
+) -> tuple[int, int]:
+    """(L_imm, NAV_before) from raw state snapshots. Exact no-op (nothing changed) scores exactly 0."""
+    h_before = holdings(old, idle_old[0], idle_old[1], s_before, True)
+    nav_before = nav(h_before, s_fair, True)
+    if old == new and idle_old == idle_new and s_before == s_after:
+        return (0, nav_before)
+    h_after = holdings(new, idle_new[0], idle_new[1], s_after, False)
+    return (nav_before - nav(h_after, s_fair, False), nav_before)
+
+
 def markout_alpha(
     old: Position, idle_old: tuple[int, int], new: Position, idle_new: tuple[int, int], s_t: int, s_fair_t: int
 ) -> int:
-    """alpha = NAV(H_new at S_T) - NAV(H_counterfactual at S_T), both at fair price S*_T. Biased down."""
+    """alpha = NAV(H_new at S_T) - NAV(H_counterfactual at S_T), both at fair price S*_T. Biased down.
+
+    Exact no-op (same range, same idle) is a non-decision and scores exactly 0 (no rounding dust).
+    """
+    if old == new and idle_old == idle_new:
+        return 0
     h_new = holdings(new, idle_new[0], idle_new[1], s_t, False)
     h_cf = holdings(old, idle_old[0], idle_old[1], s_t, True)
     return nav(h_new, s_fair_t, False) - nav(h_cf, s_fair_t, True)
