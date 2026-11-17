@@ -78,4 +78,6 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - One PLAN.md task per loop iteration. Commit after each task.
 
 ## Learnings
+- Template: solc 0.8.30, cancun, OZ uniswap-hooks v1.1.0 (BaseHook at @openzeppelin/uniswap-hooks/src/base/BaseHook.sol), test base `test/utils/BaseTest.sol` (deployArtifactsAndLabel, deployCurrencyPair, deployCodeTo to flag address).
+- Windows: keep LF line endings (.gitattributes) or `forge fmt --check` fails on every file.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->
