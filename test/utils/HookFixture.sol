@@ -59,7 +59,7 @@ abstract contract HookFixture is TenureTestBase {
     /// @dev Leak repeatedly (respecting cooldowns) until the tier reaches `target`. Bounded.
     function _leakUntil(Tier target, uint256 amountIn) internal {
         for (uint256 i; i < 40 && uint256(hook.tierOf(poolId)) < uint256(target); ++i) {
-            vm.roll(block.number + 30);
+            vm.roll(vm.getBlockNumber() + 30);
             _leakOnce(amountIn);
         }
         assertEq(uint256(hook.tierOf(poolId)), uint256(target), "reached target tier");

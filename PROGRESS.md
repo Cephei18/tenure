@@ -107,3 +107,13 @@ Tests: 16 added / 109 passing. Gas: swap 117,755 (0 due) / 247,995 (1 due) / 322
 Notes for human: the poisoned-placement test is the core attack (place liquidity at manipulated spot, attacker
 arbs back): no theft tx, but negative alpha is charged. Honest LP-ing also pays a small IL charge in alpha until
 fees are counted (stretch S1); the refill rate must cover that - tune in the M4 scenario.
+
+## 2026-11-18T12:00Z — M2.5 Freeze + safe mode — DONE
+What: FROZEN blocks beginRebalance (Tenure__Frozen); sticky under any amount of refill; safe-mode session (remove
+only, must end with zero liquidity) and pro-rata (withdrawals) allowed in every tier; guardian requestRestore ->
+timelock (blocks) -> restore lands RESTRICTED at 35% of bMax; TierChanged events FULL->RESTRICTED->FROZEN;
+settlements keep applying while frozen; setGuardian owner-only.
+Files: test/TenureHookFreeze.t.sol (+ tests switched to vm.getBlockNumber/getBlockTimestamp)
+Tests: 12 added / 121 passing under BOTH the default and the via-IR deploy profile.
+Notes for human: via-IR caches block.number inside a test function, so tests must use vm.getBlockNumber() /
+vm.getBlockTimestamp() (recorded in Learnings).

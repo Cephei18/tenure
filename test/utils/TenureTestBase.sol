@@ -109,7 +109,9 @@ abstract contract TenureTestBase is BaseTest {
     /// @dev Deep third-party full-range liquidity so swaps have something to trade against.
     function _deepLiquidity(uint128 liq) internal {
         (int24 lo, int24 hi) = _fullRange();
-        positionManager.mint(key, lo, hi, liq, type(uint256).max, type(uint256).max, address(this), block.timestamp, "");
+        positionManager.mint(
+            key, lo, hi, liq, type(uint256).max, type(uint256).max, address(this), vm.getBlockTimestamp(), ""
+        );
     }
 
     function _fullRange() internal pure returns (int24, int24) {
