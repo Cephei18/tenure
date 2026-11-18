@@ -95,4 +95,5 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - Gas snapshots are per profile: snapshots/TenureHook.<FOUNDRY_PROFILE>.json (default / deploy).
 - Fees: a range abandoned before settlement has cleared ticks; the hook snapshots its fee growth at exit (_markExit).
 - TenureHook via-IR size is 24,460 B (limit 24,576): check `FOUNDRY_PROFILE=deploy forge build --sizes` after ANY hook change.
+- vm.revertToState also reverts the TEST CONTRACT's storage: set loop params (seed, flags) AFTER reverting.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->

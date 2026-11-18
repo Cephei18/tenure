@@ -95,7 +95,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   `docs/results/headline.csv` (per-block NAV, budget, tier for each run).
   _Accept:_ test passes; loss(C) << loss(B); numbers in docs/results.
   Run A (honest) must stay in FULL for the entire run.
-- [ ] **M4.2b Seed sweep.** Run the headline scenario A/B/C over 20 seeds. Runs B and C must use identical
+- [x] **M4.2b Seed sweep.** Run the headline scenario A/B/C over 20 seeds. Runs B and C must use identical
   attacker and curator code, differing only in whether Tenure's budget is active (assert this in code).
   Report per run: median and worst-case vault loss, attacker profit, blocks from attack start to RESTRICTED and
   to FROZEN, and A's minimum budget ratio. Write docs/results/sweep.csv and a summary table in docs/RESULTS.md.

@@ -284,3 +284,23 @@ ratioC, tierC (NAV in token1 wei at the fair price; ratio = budget/bMax in WAD; 
 docs/results/slow_bleed.csv exists from M1.6.
 Watch out: TenureHook is 24,460 B under the deploy profile (limit 24,576). Any hook change (M5.4!) must re-check
 `FOUNDRY_PROFILE=deploy forge build --sizes`; options are in foundry.toml.
+
+## 2026-11-18T22:00Z — M4.2b Seed sweep — DONE
+What: headline runner moved into abstract HeadlineBase (Headline.t.sol); test/scenario/Sweep.t.sol runs A/B/C
+over 20 seeds. _runBC asserts B and C have identical curator and attacker codehash and identical hook settings
+except bMax0/bMaxCap. Per-seed rows: docs/results/sweep.csv; summary table + interpretation: docs/RESULTS.md.
+Results (median / worst): B loss vs A 6,450 / 7,435; C loss vs A 3,729 / 4,520; attacker profit B 1,586 vs C 650;
+C frozen on 20/20 seeds, 60-76 blocks after poison; A FULL in every block of every seed (min ratio 83.1%).
+Acceptance: A FULL on every seed (asserted); C worst (4,520) < B median (6,450).
+Files: test/scenario/Headline.t.sol, test/scenario/Sweep.t.sol (new), test/scenario/ScenarioActors.sol,
+docs/RESULTS.md (new), docs/results/sweep.csv, CLAUDE.md
+Tests: 1 added / 163 passing. `FOUNDRY_PROFILE=deploy forge build` OK.
+Decisions made:
+- "Loss vs A" is reported as specified, but RESULTS.md explains it mixes attack damage with market divergence
+  (B and C share most of it; the B - C gap is stable at 2,571-2,938 tokens). Attacker profit is given as the
+  cleaner damage measure.
+- Seeds: keccak256("tenure-sweep", k), k = 0..19. Headline seed 0x7e2a is unchanged.
+Notes for human: the first sweep run printed identical numbers for every seed - vm.revertToState was resetting
+the test contract's `seed` variable. Fixed (seed set after each revert) and guarded by an assertion that
+different seeds produce different markets. On 5 seeds C goes FULL -> FROZEN without a sampled RESTRICTED block
+(two markouts settle in one block).
