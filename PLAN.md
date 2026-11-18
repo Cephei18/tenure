@@ -73,7 +73,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   net extractable value; differential tests pass; docs/MATH.md has the pump-bound argument.
 
 ## M3 — The vault
-- [ ] **M3.1 CuratedVault.** Two-token vault, one curated position per pool for MVP. Shares priced at NAV at FAIR price
+- [x] **M3.1 CuratedVault.** Two-token vault, one curated position per pool for MVP. Shares priced at NAV at FAIR price
   (Gamma lesson). Deposit guard: revert if pool spot deviates from fair price beyond a threshold. Deposit cap from the
   hook's reputation state. Withdrawals ALWAYS open, pro-rata, even when FROZEN.
   _Accept:_ tests: first-depositor inflation attack fails; deposit at manipulated spot reverts; withdraw works in

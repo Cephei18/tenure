@@ -141,3 +141,26 @@ Decisions made:
   Mutation-checked: the exact test fails for k in [2e18, 3e18].
 Notes for human: the pump test is at RiskBudget level (pay X = credit X). A hook/vault-level version (attacker
 literally trades value into the vault) fits better in M5.2 once CuratedVault exists.
+
+## 2026-11-18T15:40Z — M3.1 CuratedVault — DONE
+What: src/CuratedVault.sol: ERC20 shares priced at NAV at the FAIR price (deposit value rounded down, NAV rounded
+up); deposit guard (|spot - fair| <= maxDepositDeviation ticks, fresh oracle); deposit cap = hook.depositCap
+(reputation); withdrawals pro-rata IN KIND with no tier check, no oracle read and no price (work when FROZEN,
+with a stale oracle, and at a manipulated spot); curator-only rebalance (begin -> unlock(remove all, swap, add)
+-> end); enterSafeMode (curator or owner); owner can replace the curator.
+Files: src/CuratedVault.sol, test/CuratedVault.t.sol, test/utils/VaultFixture.sol, CLAUDE.md
+Tests: 18 added / 145 passing. `FOUNDRY_PROFILE=deploy forge build` OK. CuratedVault 16.4KB.
+Decisions made:
+- Inflation defense = 1e6 dead shares minted to 0xdEaD on the first deposit (Uniswap v2 style), plus
+  ZeroShares/minShares checks. Chosen over ERC4626 virtual offsets because withdrawals are pro-rata in kind by
+  real supply; a virtual offset would not absorb a donation there. Test: attacker loses ~all of a 20k donation,
+  victim loses < 0.01%.
+- Deposits stay idle until the curator's next measured rebalance (no unmeasured liquidity change at deposit).
+- Withdraw removes floor(L * shares / supply) in a hook pro-rata session; fees collected by that removal are
+  shared pro-rata like idle balances (principal = callerDelta - feesAccrued goes to the withdrawer in full).
+- rebalance(params) was implemented here because the tier tests need measured rebalances; M3.2 adds the
+  end-to-end reconciliation test and any hardening.
+- ERC20 currencies only (native ETH reverts in the constructor) for the MVP.
+Notes for human: shares/NAV use hook views (currentRange, settingsOf, configs) so the vault and the hook agree on
+the position; the vault recomputes NAV with its own rounding direction rather than calling hook.navOf (which
+always rounds down).
