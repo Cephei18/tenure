@@ -178,3 +178,12 @@ Tests: 3 added / 148 passing. Deploy build: src/ unchanged since M3.1 (deploy bu
 Decisions made: an unfundable rebalance surfaces the token's own balance-underflow panic rather than a custom
 error (the vault does not pre-compute amounts; the PoolManager/settle path is the source of truth).
 Notes for human: none
+
+## 2026-11-18T17:20Z — M3.3 Fees in alpha — BLOCKED
+What: implemented end to end (model, vectors, library, hook, vault NAV) but it breaks an existing gas guard
+(afterSwap with one due record: 191,924 > 150,000). Loosening that assertion is a test weakening, so the work is
+saved on local branch `wip/m3.3-fees` and main is back at M3.2. Details + recommendation in BLOCKERS.md.
+Decisions made (on the branch): fee estimates are exact when the range's ticks are initialized at settlement and
+inside <= global growth; otherwise curator-adverse fallback (new range -> 0, counterfactual -> L * global delta).
+H_before/H_after and NAV include uncollected fees on the vault position (fixes leak masking by collected fees).
+Notes for human: please choose (a)/(b)/(c) in BLOCKERS.md. I recommend (a).

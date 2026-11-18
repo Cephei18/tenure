@@ -80,7 +80,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   every tier; deposit cap enforced and grows with reputation.
 - [x] **M3.2 rebalance(params).** Curator-only. begin -> unlock(remove, add) -> end. Settles deltas correctly.
   _Accept:_ end-to-end test: deposit, rebalance, swap, settle, withdraw; balances reconcile to the wei.
-- [ ] **M3.3 Fees in alpha.** Include LP fees earned by the new position (fee growth inside the range) in H_new,
+- [!] **M3.3 Fees in alpha.** Include LP fees earned by the new position (fee growth inside the range) in H_new,
   and fees the old position would have earned in H_cf where computable; otherwise document the approximation.
   _Accept:_ in a seeded honest-curator scenario with normal swap flow, the honest curator's budget never drops
   below the FULL threshold over 500 blocks; differential tests updated; Python model updated first.
