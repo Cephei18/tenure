@@ -86,7 +86,7 @@ State: `cumAlphaWad` (net positive alpha, WAD of NAV) and `cumAlphaValue` (net p
 on settle with alpha > 0 (credit):
   cumAlphaWad += alphaWad; cumAlphaValue += alpha
   bMax'  = min(bMaxCap, bMax0 + k * cumAlphaWad)          (WAD)
-  budget += bMax' - bMax   (unless FROZEN)                // deficit bMax - budget unchanged: NO refill
+  budget = floor(budget * bMax' / bMax)   (unless FROZEN)  // ratio budget/bMax unchanged: NO refill
 on any loss (charge, L_imm or negative alpha):
   cumAlphaWad   = sat_sub(cumAlphaWad, lossWad)            // losses reduce net positive alpha first
   cumAlphaValue = sat_sub(cumAlphaValue, lossValue)
@@ -95,9 +95,15 @@ on any loss (charge, L_imm or negative alpha):
 depositCap = min(capMax, cap0 + m * cumAlphaValue)
 ```
 ACCEPTED decisions:
-- Positive alpha grows `bMax` and the deposit cap but NEVER refills spent budget. The budget only rises by the
-  new headroom so the deficit `bMax - budget` is preserved (tier never drops just because bMax grew); while
-  FROZEN, credit changes reputation only, not budget.
+- Positive alpha grows `bMax` and the deposit cap but NEVER refills spent budget.
+- When bMax grows from positive alpha, scale the budget proportionally:
+     budget_new = floor(budget_old * bMax_new / bMax_old)
+  so budget/bMax is unchanged. Success never changes the tier; only time refill (or guardian restore from FROZEN)
+  does. Reputation gain factor k must satisfy k <= 1e18 (WAD), enforced in the constructor
+  (Tenure__ReputationGainTooHigh). Pump bound: each unit of alpha an attacker manufactures by paying the vault buys
+  at most k <= 1 unit of extra allowed loss, so pumping is never profitable. NOTE: until PLAN task M2.6 is [x],
+  RiskBudget.sol and sim/model.py still implement the old additive rule; M2.6 brings them into line with this
+  section.
 - Losses reduce cumulative positive alpha (saturating at 0), so reputation is net of losses and bMax / deposit
   cap can shrink back toward their base values.
 

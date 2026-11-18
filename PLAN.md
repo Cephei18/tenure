@@ -67,7 +67,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [ ] **M2.6 Proportional budget scaling + pump bound.** When bMax grows from positive alpha, scale budget by
   bMax_new / bMax_old (floor) so budget/bMax is unchanged; success never changes tier, only time refill or guardian
   restore does. Enforce k <= 1e18 in the constructor (Tenure__ReputationGainTooHigh). Update sim/model.py first,
-  regenerate vectors, then RiskBudget.sol, then tenure-math section 7.
+  regenerate vectors, then RiskBudget.sol.
   _Accept:_ fuzz: tier never changes on a positive-alpha settle; ratio preserved within 1 wei (rounded down);
   constructor reverts for k > 1e18; a test shows pumping alpha by paying the vault X never increases the attacker's
   net extractable value; differential tests pass; docs/MATH.md has the pump-bound argument.
