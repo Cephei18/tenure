@@ -222,8 +222,42 @@ contract PoisonedCurator is HonestCurator {
         if (!_cooldownOk() || hook.tierOf(id) == Tier.FROZEN) return false;
         int24 fairT = ScenarioMath.fairTick(oracle, id);
         int24 spotT = ScenarioMath.spotTick(pm, id);
-        if (ScenarioMath.absDiff(spotT, fairT) <= maxSpotDev) return _recenter(fairT + parkOffset);
+        if (ScenarioMath.absDiff(spotT, fairT) <= maxSpotDev) return _park(fairT + parkOffset);
         return _recenter(spotT);
+    }
+
+    /// @dev Park with "inventory management": swap up to 5% of NAV toward a 50/50 value split at the fair price
+    ///      (inside the 20% move cap), so the vault keeps enough of both tokens to be exploited again next round.
+    function _park(int24 target) internal returns (bool) {
+        Holdings memory h = vault.totalHoldings();
+        (uint160 f,) = oracle.getSqrtPriceX96(id);
+        uint256 v0 = PositionValue.navAt(Holdings(h.amount0, 0), f, false);
+        uint256 cap = (v0 + h.amount1) / 20;
+        int256 swapAmount;
+        if (h.amount1 > v0) {
+            uint256 sell1 = (h.amount1 - v0) / 2;
+            swapAmount = -int256(sell1 < cap ? sell1 : cap);
+        } else if (v0 > h.amount1) {
+            uint256 sellValue = (v0 - h.amount1) / 2;
+            if (sellValue > cap) sellValue = cap;
+            swapAmount = int256(h.amount0 * sellValue / v0); // token0 amount worth sellValue
+        }
+        int24 c = ScenarioMath.floorTo(target, spacing);
+        int24 tl = c - halfWidth;
+        int24 tu = c + halfWidth;
+        (uint160 spot,,,) = StateLibrary.getSlot0(pm, id);
+        uint128 l = LiquidityAmounts.getLiquidityForAmounts(
+            spot, TickMath.getSqrtPriceAtTick(tl), TickMath.getSqrtPriceAtTick(tu), h.amount0, h.amount1
+        );
+        l = uint128(uint256(l) * 90 / 100);
+        uint160 limit = swapAmount > 0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        try vault.rebalance(CuratedVault.RebalanceParams(tl, tu, l, swapAmount, limit)) {
+            ++actions;
+            return true;
+        } catch {
+            ++refusals;
+            return false;
+        }
     }
 }
 

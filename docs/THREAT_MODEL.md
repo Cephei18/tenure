@@ -44,7 +44,15 @@ distance of range center from fair, no swap, cooldown):
 
 **Measured** (one round, `test/scenario/ScenarioActors.t.sol::test_attacker_profitsFromPoisonedPlacement`;
 pool with 2e23 full-range third-party liquidity, vault of 40k + 40k at price 1, push of 400 ticks):
-attacker profit **+421.9 tokens** at the fair price, vault loss **524.1 tokens** (~0.65% of NAV per round).
+attacker profit **+421.9 tokens** at the fair price, vault loss **446.0 tokens** (~0.56% of NAV per round).
+(In the first M4.1 version, before the poisoned curator re-balanced its inventory when parking, the same round
+cost the vault 524.1 tokens.) Without inventory management the damage decays geometrically: each round the vault
+sells token0, so its next follow-range holds less and less (L: 1.0e24 -> 4.0e23 -> 1.1e23 over three rounds).
+
+**Headline (M4.2, 600 blocks, one seeded market, `test/scenario/Headline.t.sol`):** static caps only (run B):
+25 rounds, vault -4,197 tokens vs. the honest run (~5% of NAV), attacker +1,563. Tenure (run C): RESTRICTED at
+block 160, FROZEN at block 170 after 3 rounds, safe mode; vault -1,261 vs. the honest run (including fees forgone
+while idle), attacker +625. B's loss grows with time; C's is capped at the freeze.
 
 **Why static caps don't stop it.** No single action breaks a per-action rule, and no transaction is a theft.
 **What Tenure does.** A pure re-range at a manipulated spot leaks ~0 immediately (both snapshots are taken at the

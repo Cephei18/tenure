@@ -26,7 +26,7 @@ contract TenureHookFeesTest is VaultFixture {
     }
 
     /// Realistic (default) budget: 2% of NAV, refilled over ~1 day of blocks.
-    function _vaultSettings() internal pure override returns (PoolSettings memory s) {
+    function _vaultSettings() internal view override returns (PoolSettings memory s) {
         s = super._vaultSettings();
         s.budget = TenureDefaults.budgetParams();
     }

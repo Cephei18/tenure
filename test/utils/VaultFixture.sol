@@ -25,7 +25,7 @@ abstract contract VaultFixture is TenureTestBase {
     uint128 constant L_RANGE = 1e24; // fits in a 40k/40k vault for a +-600 tick range at price 1
 
     /// @dev Real mandate rules and a small budget (0.2% of NAV) so a few measured leaks walk the tiers.
-    function _vaultSettings() internal pure virtual returns (PoolSettings memory s) {
+    function _vaultSettings() internal view virtual returns (PoolSettings memory s) {
         s = _settings();
         s.mandate = Mandate({minWidth: 120, maxWidth: 12_000, maxCenterDist: 3000, maxMoveWad: 0.2e18, cooldown: 10});
         s.budget.bMax0 = 2e15;

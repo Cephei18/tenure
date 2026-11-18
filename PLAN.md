@@ -89,7 +89,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [x] **M4.1 Scenario actors.** Solidity test actors: `HonestCurator` (tracks fair price), `PoisonedCurator` (after a
   "poison" event, places ranges skewed off fair price within static caps), `Attacker` (trades against mispriced
   liquidity, arbitrage profit), `Market` (moves fair price along a seeded path).
-- [ ] **M4.2 Headline scenario test.** Same seeded market, three runs: (A) honest curator + Tenure: builds budget,
+- [x] **M4.2 Headline scenario test.** Same seeded market, three runs: (A) honest curator + Tenure: builds budget,
   deposit cap grows; (B) poisoned curator + static caps only: slow bleed succeeds; (C) poisoned curator + Tenure:
   budget drains, tiers step down, frozen, loss bounded. Print a clear comparison table; write
   `docs/results/headline.csv` (per-block NAV, budget, tier for each run).
