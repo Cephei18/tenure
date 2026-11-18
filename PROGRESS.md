@@ -247,3 +247,29 @@ pessimistic for the curator; documented in docs/MATH.md as a known limitation.
   behavior: removed the unused hook.navOf (the vault prices shares with its own nav(bool)), and moved fees-owed
   (new src/libraries/FeesOwed.sol) and the spot/fair deviation check into the vault. Now 24,460 B (116 B headroom)
   at the normal 200 runs. M5.4 adds code: it must make room (lower deploy optimizer_runs or move views out).
+
+## 2026-11-18T21:00Z — M4.2 Headline scenario test — DONE
+What: test/scenario/Headline.t.sol runs one seeded market (fair walk +-20 ticks/block, noise trades, arbitrage)
+three times from the same clean state (vm.snapshotState/revertToState), 600 blocks each, poison at block 100,
+default budget (2% of NAV):
+  A honest + Tenure:          FULL in all 600 blocks (asserted every block), final NAV 81,521 tokens
+  B poisoned + static caps:   25 attack rounds, -4,197 tokens vs A (~5% of NAV), attacker +1,563
+  C poisoned + Tenure:        RESTRICTED at block 160, FROZEN at 170 after 3 rounds -> safe mode,
+                              -1,261 vs A (includes fees forgone while idle), attacker +625
+Per-block NAV, budget ratio and tier for all runs: docs/results/headline.csv (600 rows).
+Files: test/scenario/Headline.t.sol (new), test/scenario/ScenarioActors.sol, test/utils/VaultFixture.sol,
+test/TenureHookFees.t.sol, docs/THREAT_MODEL.md, docs/results/headline.csv
+Tests: 1 added / 162 passing. `FOUNDRY_PROFILE=deploy forge build` OK.
+Decisions made:
+- Run B = the same hook with bMax0 = bMaxCap = 100% of NAV, so only the static mandate binds.
+- The attacker strikes only when the curator is out of cooldown (otherwise it pays for pushes that capture
+  nothing). Attacker profit is summed per round at that round's fair price (its 10M-token inventory is not
+  marked to the random walk).
+- PoisonedCurator now re-balances inventory (swap <= 5% of NAV toward 50/50 at fair, inside the 20% move cap) when
+  it parks. Without it the bleed decays geometrically and run B looked harmless. This changed the M4.1 per-round
+  vault loss from 524.1 to 446.0 tokens (attacker profit unchanged at 421.9); THREAT_MODEL updated.
+- Simulation test pauses gas metering (3 x 600 blocks exceeds the 2^30 per-test gas limit); the CSV is streamed
+  with vm.writeLine (string.concat accumulation is quadratic in memory gas).
+- VaultFixture._vaultSettings is now `view` (run B switches params via a storage flag).
+Notes for human: loss(C) vs loss(B) is 3.3x at 600 blocks and widens linearly with run length (C is frozen).
+"Loss vs A" counts A's fee income, so C's figure includes ~430 blocks of forgone fees, not only attack damage.
