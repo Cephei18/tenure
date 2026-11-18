@@ -95,6 +95,16 @@ as pure libraries with heavy tests, before any vault plumbing.
   `docs/results/headline.csv` (per-block NAV, budget, tier for each run).
   _Accept:_ test passes; loss(C) << loss(B); numbers in docs/results.
   Run A (honest) must stay in FULL for the entire run.
+- [ ] **M4.2b Seed sweep.** Run the headline scenario A/B/C over 20 seeds. Runs B and C must use identical
+  attacker and curator code, differing only in whether Tenure's budget is active (assert this in code).
+  Report per run: median and worst-case vault loss, attacker profit, blocks from attack start to RESTRICTED and
+  to FROZEN, and A's minimum budget ratio. Write docs/results/sweep.csv and a summary table in docs/RESULTS.md.
+  _Accept:_ A stays FULL on every seed; C's worst-case loss is below B's median loss, or the result is reported
+  honestly in RESULTS.md with an explanation if not.
+- [ ] **M4.2c Contract size headroom.** Get the hook at least 2,000 bytes under 24,576 in the deploy profile.
+  Try lowering optimizer_runs in the deploy profile first; if insufficient, move scoring math into an external
+  library or separate scorer contract. _Accept:_ size report shows >= 2,000 bytes headroom; full suite and
+  gas assertions still pass (re-measure; any gas increase is recorded under Decisions made).
 - [ ] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`: NAV over
   time for B vs C with tier changes marked; budget over time.
   _Accept:_ PNGs generated from the CSVs.
