@@ -10,7 +10,7 @@ import gen_vectors as g
 def test_vectors_match_model():
     rng = random.Random(g.SEED)
     for name, fn in [("holdings", g.gen_holdings), ("nav", g.gen_nav), ("leakage", g.gen_leakage),
-                     ("alpha", g.gen_alpha), ("loss", g.gen_loss), ("budget", g.gen_budget)]:
+                     ("alpha", g.gen_alpha), ("loss", g.gen_loss), ("budget", g.gen_budget), ("fees", g.gen_fees)]:
         expected = fn(rng)
         with open(os.path.join(g.OUT, f"{name}.json")) as f:
             on_disk = json.load(f)["cases"]

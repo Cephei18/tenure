@@ -15,6 +15,8 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 
 Q96 = 1 << 96
+Q128 = 1 << 128
+U256 = 1 << 256
 WAD = 10**18
 UINT256_MAX = (1 << 256) - 1
 
@@ -207,6 +209,61 @@ def markout_alpha(
     h_new = holdings(new, idle_new[0], idle_new[1], s_t, False)
     h_cf = holdings(old, idle_old[0], idle_old[1], s_t, True)
     return nav(h_new, s_fair_t, False) - nav(h_cf, s_fair_t, True)
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Section 4b (M3.3): LP fees in the markout
+# --------------------------------------------------------------------------------------------------------------------
+def fee_growth_delta(now: int, then: int) -> int:
+    """v4 fee growth accumulators are uint256 that wrap by design; deltas are taken mod 2^256 (Solidity unchecked)."""
+    return (now - then) % U256
+
+
+def fee_amounts(d0: int, d1: int, liq: int, round_up: bool) -> tuple[int, int]:
+    """Fees earned by `liq` over a fee-growth delta (X128 per unit liquidity). v4 itself floors."""
+    f = mul_div_up if round_up else mul_div
+    return (f(d0, liq, Q128), f(d1, liq, Q128))
+
+
+def estimate_fees(
+    d_inside: tuple[int, int], d_global: tuple[int, int], liq: int, inside_valid: bool, counterfactual: bool
+) -> tuple[int, int]:
+    """Fees a hypothetical position (range, liq) earned between the record and settlement.
+
+    Exact when the range's fee-growth-inside is trustworthy (`inside_valid`: both ticks initialized at settlement,
+    and the inside delta does not exceed the global delta for either token). Otherwise curator-adverse fallback:
+    the NEW position is credited 0 fees, the COUNTERFACTUAL is credited liq * global delta (as if it had been in
+    range the whole time, an upper bound). New fees round down, counterfactual fees round up.
+    """
+    if liq == 0:
+        return (0, 0)
+    ok = inside_valid and d_inside[0] <= d_global[0] and d_inside[1] <= d_global[1]
+    if counterfactual:
+        return fee_amounts(*(d_inside if ok else d_global), liq, True)
+    return fee_amounts(*d_inside, liq, False) if ok else (0, 0)
+
+
+def markout_alpha_fees(
+    old: Position,
+    idle_old: tuple[int, int],
+    fees_cf: tuple[int, int],
+    new: Position,
+    idle_new: tuple[int, int],
+    fees_new: tuple[int, int],
+    s_t: int,
+    s_fair_t: int,
+) -> int:
+    """Markout alpha with LP fees: fees are added to each side's idle holdings. A no-op decision still scores 0."""
+    if old == new and idle_old == idle_new:
+        return 0
+    return markout_alpha(
+        old,
+        (idle_old[0] + fees_cf[0], idle_old[1] + fees_cf[1]),
+        new,
+        (idle_new[0] + fees_new[0], idle_new[1] + fees_new[1]),
+        s_t,
+        s_fair_t,
+    )
 
 
 def loss_wad(loss_value: int, nav_ref: int) -> int:
