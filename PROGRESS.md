@@ -203,3 +203,19 @@ Decisions made:
   +422 tokens, vault -524 (pool with 2e23 full-range third-party liquidity; VaultFixture depth is now overridable).
 - Honest curator stays FULL over 200 blocks of a +-30 tick/step walk WITHOUT fees in alpha (M3.3 blocked).
 Notes for human: none
+
+## Handoff — 2026-11-18T18:10Z
+Where I stopped: after M4.1 (commit 9584ee4). main is green: 153 tests, sim 43 passed, deploy build OK.
+Done this session: M2.6, M3.1, M3.2, M4.1. Blocked: M3.3 (see BLOCKERS.md; work on branch wip/m3.3-fees).
+Next: M4.2 headline scenario. Building blocks are ready in test/scenario/ScenarioActors.sol:
+  - Use VaultFixture with _thirdPartyLiquidity() = 2e23 (as ScenarioActorsTest does) so attacks pay.
+  - Run A: HonestCurator + Market (seeded). Without fees it stayed FULL for 200 blocks of a +-30 tick walk;
+    check 500+ blocks before relying on it - if A dips below FULL, that is the M3.3 decision biting.
+  - Runs B/C: PoisonedCurator poisoned at block N; per round: act (parks away) -> roll cooldown ->
+    attacker.push(-400) -> act (follows spot) -> attacker.arbBack(). Run B = "static caps only": same vault but
+    a hook registered with a huge budget (bMax0 = bMaxCap = 1e18) so tiers never bind, or count rounds the
+    static mandate allows; Run C = normal Tenure params. Record per-block NAV, budget, tier to
+    docs/results/headline.csv (fs_permissions already allow ./docs/results).
+Half-understood: positive-alpha settlements now scale the budget proportionally (M2.6); a poisoned curator that
+alternates park/follow may score positive alpha on some "park" records - harmless for tiers (credit never changes
+tier) but visible in the CSV.
