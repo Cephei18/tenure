@@ -207,10 +207,10 @@ contract PoisonedCurator is HonestCurator {
     int24 public immutable parkOffset;
     bool public poisoned;
 
-    constructor(CuratedVault v, MockReferencePrice o, int24 hw, uint256 recenter, uint256 maxSpotDev, int24 _park)
+    constructor(CuratedVault v, MockReferencePrice o, int24 hw, uint256 recenter, uint256 maxSpotDev, int24 parkTicks)
         HonestCurator(v, o, hw, recenter, maxSpotDev)
     {
-        parkOffset = _park;
+        parkOffset = parkTicks;
     }
 
     function poison() external {

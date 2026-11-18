@@ -16,10 +16,11 @@ import {Market, CuratorBase, HonestCurator, PoisonedCurator, Attacker, ScenarioM
 ///   C: poisoned curator + Tenure           -> budget drains, RESTRICTED, FROZEN, safe mode; loss bounded
 /// Each run starts from the same clean state (vm.snapshotState / revertToState); per-block NAV, budget ratio and
 /// tier are written to docs/results/headline.csv.
-contract HeadlineTest is VaultFixture {
+abstract contract HeadlineBase is VaultFixture {
     uint256 constant BLOCKS = 600;
     uint256 constant POISON_AT = 100;
     uint256 constant SEED = 0x7e2a;
+    uint256 seed = SEED; // market seed for the next _run (the sweep varies it)
     int24 constant PUSH = -400;
     int24 constant PARK = 1500;
 
@@ -33,6 +34,10 @@ contract HeadlineTest is VaultFixture {
         uint256 frozenAt; // block index, 0 = never
         uint256 restrictedAt; // first block index in RESTRICTED, 0 = never
         uint256 rounds; // completed push -> follow -> arb rounds
+        uint256 minRatio; // lowest budget/bMax seen, WAD
+        bytes32 curatorCode; // codehash of the curator contract (B and C must match)
+        bytes32 attackerCode; // codehash of the attacker contract (B and C must match)
+        PoolSettings settings; // hook settings the run was registered with
     }
 
     function _thirdPartyLiquidity() internal pure override returns (uint128) {
@@ -48,38 +53,29 @@ contract HeadlineTest is VaultFixture {
         }
     }
 
-    function test_headline_threeRuns() public {
-        vm.pauseGasMetering(); // a 3 x 600-block simulation, not a gas measurement
-        uint256 clean = vm.snapshotState();
-        Run memory a = _run(false);
+    /// Runs B and C of one seed. Asserts in code that they differ ONLY in whether Tenure's budget can bind:
+    /// same curator and attacker bytecode, same mandate/oracle/window settings, same budget params except bMax.
+    /// @dev vm.revertToState also reverts THIS contract's storage, so `seed` and `staticOnly` are set after it.
+    function _runBC(uint256 clean, uint256 s) internal returns (Run memory b, Run memory c) {
         vm.revertToState(clean);
-        staticOnly = true;
-        Run memory b = _run(true);
+        (seed, staticOnly) = (s, true);
+        b = _run(true);
         vm.revertToState(clean);
-        staticOnly = false;
-        Run memory c = _run(true);
-
-        uint256 navA = a.nav[BLOCKS - 1];
-        uint256 lossB = _sub(navA, b.nav[BLOCKS - 1]);
-        uint256 lossC = _sub(navA, c.nav[BLOCKS - 1]);
-        _print(a, b, c, lossB, lossC);
-        _writeCsv(a, b, c);
-
-        for (uint256 i; i < BLOCKS; ++i) {
-            assertEq(a.tier[i], uint8(Tier.FULL), "run A: honest curator stays FULL every block");
-        }
-        assertGt(c.restrictedAt, 0, "run C steps down to RESTRICTED");
-        assertGt(c.frozenAt, c.restrictedAt, "run C then FREEZES");
-        assertGt(b.rounds, 3 * c.rounds, "run B: static caps let the attack keep going");
-        assertGt(lossB, 0, "run B bleeds");
-        assertLt(lossC * 3, lossB, "loss(C) << loss(B)");
+        (seed, staticOnly) = (s, false);
+        c = _run(true);
+        assertEq(b.curatorCode, c.curatorCode, "B and C: identical curator code");
+        assertEq(b.attackerCode, c.attackerCode, "B and C: identical attacker code");
+        PoolSettings memory sb = b.settings;
+        sb.budget.bMax0 = c.settings.budget.bMax0;
+        sb.budget.bMaxCap = c.settings.budget.bMaxCap;
+        assertEq(keccak256(abi.encode(sb)), keccak256(abi.encode(c.settings)), "B and C differ only in budget size");
     }
 
     // ------------------------------------------------------------------------------------------------ one run
     function _run(bool poisoned) internal returns (Run memory r) {
         _setUpVault();
         _deposit(ALICE, 40_000 ether, 40_000 ether);
-        Market market = new Market(poolManager, oracle, swapper, key, SEED, 20, 2_000 ether);
+        Market market = new Market(poolManager, oracle, swapper, key, seed, 20, 2_000 ether);
         TestSwapper atkSwapper = new TestSwapper(poolManager);
         _fund(address(atkSwapper), 10_000_000 ether);
         Attacker atk = new Attacker(poolManager, oracle, atkSwapper, key);
@@ -87,6 +83,10 @@ contract HeadlineTest is VaultFixture {
             ? CuratorBase(new PoisonedCurator(cv, oracle, 600, 120, 30, PARK))
             : CuratorBase(new HonestCurator(cv, oracle, 600, 120, 30));
         cv.setCurator(address(cur));
+        r.curatorCode = address(cur).codehash;
+        r.attackerCode = address(atk).codehash;
+        r.settings = hook.settingsOf(poolId);
+        r.minRatio = type(uint256).max;
         cur.act();
 
         r.nav = new uint256[](BLOCKS);
@@ -102,6 +102,7 @@ contract HeadlineTest is VaultFixture {
             (r.nav[i],) = cv.nav(false);
             BudgetState memory b = hook.budgetOf(poolId);
             r.ratio[i] = b.budget * 1e18 / b.bMax;
+            if (r.ratio[i] < r.minRatio) r.minRatio = r.ratio[i];
             r.tier[i] = uint8(b.tier);
             if (b.tier == Tier.RESTRICTED && r.restrictedAt == 0) r.restrictedAt = i;
         }
@@ -166,5 +167,29 @@ contract HeadlineTest is VaultFixture {
 
     function _sub(uint256 x, uint256 y) internal pure returns (uint256) {
         return x > y ? x - y : 0;
+    }
+}
+
+contract HeadlineTest is HeadlineBase {
+    function test_headline_threeRuns() public {
+        vm.pauseGasMetering(); // a 3 x 600-block simulation, not a gas measurement
+        uint256 clean = vm.snapshotState();
+        Run memory a = _run(false);
+        (Run memory b, Run memory c) = _runBC(clean, SEED);
+
+        uint256 navA = a.nav[BLOCKS - 1];
+        uint256 lossB = _sub(navA, b.nav[BLOCKS - 1]);
+        uint256 lossC = _sub(navA, c.nav[BLOCKS - 1]);
+        _print(a, b, c, lossB, lossC);
+        _writeCsv(a, b, c);
+
+        for (uint256 i; i < BLOCKS; ++i) {
+            assertEq(a.tier[i], uint8(Tier.FULL), "run A: honest curator stays FULL every block");
+        }
+        assertGt(c.restrictedAt, 0, "run C steps down to RESTRICTED");
+        assertGt(c.frozenAt, c.restrictedAt, "run C then FREEZES");
+        assertGt(b.rounds, 3 * c.rounds, "run B: static caps let the attack keep going");
+        assertGt(lossB, 0, "run B bleeds");
+        assertLt(lossC * 3, lossB, "loss(C) << loss(B)");
     }
 }
