@@ -117,3 +117,27 @@ Files: test/TenureHookFreeze.t.sol (+ tests switched to vm.getBlockNumber/getBlo
 Tests: 12 added / 121 passing under BOTH the default and the via-IR deploy profile.
 Notes for human: via-IR caches block.number inside a test function, so tests must use vm.getBlockNumber() /
 vm.getBlockTimestamp() (recorded in Learnings).
+
+## 2026-11-18T14:45Z — M2.6 Proportional budget scaling + pump bound — DONE
+What: positive alpha now scales the budget by bMax'/bMax (floor) instead of adding the new headroom, so
+budget/bMax is preserved and success never changes the tier. k <= 1e18 enforced (Tenure__ReputationGainTooHigh).
+Model updated first, vectors regenerated (budget.json changed), then RiskBudget.sol. Pump-bound argument in
+docs/MATH.md (new file; M6.2 extends it).
+Files: sim/model.py, sim/test_model.py, test/vectors/budget.json, src/libraries/RiskBudget.sol,
+test/unit/RiskBudget.t.sol, test/TenureHook.t.sol, test/TenureHookScoring.t.sol, docs/MATH.md,
+.claude/skills/tenure-math/SKILL.md, CLAUDE.md
+Tests: 6 added / 127 passing (default profile). `FOUNDRY_PROFILE=deploy forge build` OK. sim: 43 passed.
+Decisions made:
+- The task says "enforce k <= 1e18 in the constructor", but the hook constructor takes no budget params: k is a
+  per-pool BudgetParams field set in registerPool. Enforced in RiskBudget.validate, which registerPool calls;
+  tested at both library and hook level.
+- credit() keeps the current tier instead of recomputing it. With floor scaling, a curator exactly on a threshold
+  could otherwise lose a tier to a 1-wei rounding artifact, contradicting "success never changes tier".
+- Two old tests asserted the old additive rule (deficit preserved): test_credit_keepsDeficit_growsCaps (unit,
+  sim) and the deficit assertion in test_goodExit_positiveAlpha_growsReputationOnly. They were REPLACED with the
+  new rule's assertions (spec change, not weakening).
+- Pump test measures "extractable value" as the exact largest loss that leaves the curator un-frozen (binary
+  search). A slow-bleed variant allows one 0.01% step of granularity; the exact one has no tolerance.
+  Mutation-checked: the exact test fails for k in [2e18, 3e18].
+Notes for human: the pump test is at RiskBudget level (pay X = credit X). A hook/vault-level version (attacker
+literally trades value into the vault) fits better in M5.2 once CuratedVault exists.

@@ -13,7 +13,8 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 import {EasyPosm} from "./utils/libraries/EasyPosm.sol";
 import {TenureTestBase} from "./utils/TenureTestBase.sol";
 import {SessionVault} from "./utils/TestActors.sol";
-import {TenureHook} from "../src/TenureHook.sol";
+import {TenureHook, PoolSettings} from "../src/TenureHook.sol";
+import {RiskBudget} from "../src/libraries/RiskBudget.sol";
 import {Range} from "../src/libraries/PositionValue.sol";
 import {IReferencePrice} from "../src/interfaces/IReferencePrice.sol";
 import {ReferencePriceLib} from "../src/libraries/ReferencePriceLib.sol";
@@ -87,6 +88,19 @@ contract TenureHookTest is TenureTestBase {
         k2.hooks = IHooks(address(0));
         vm.expectRevert(TenureHook.Tenure__WrongHook.selector);
         hook.registerPool(k2, address(vault), oracle, _settings());
+    }
+
+    /// Pump bound (M2.6): a reputation gain factor k > 1 would let manufactured alpha buy more allowed loss than it
+    /// cost, so registration rejects it. k == 1 is the boundary and is accepted.
+    function test_register_reputationGainAboveOne_reverts() public {
+        PoolKey memory k2 = key;
+        k2.fee = 500;
+        PoolSettings memory s = _settings();
+        s.budget.k = 1e18 + 1;
+        vm.expectRevert(RiskBudget.Tenure__ReputationGainTooHigh.selector);
+        hook.registerPool(k2, address(vault), oracle, s);
+        s.budget.k = 1e18;
+        hook.registerPool(k2, address(vault), oracle, s);
     }
 
     function test_register_emits() public {

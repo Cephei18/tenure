@@ -87,14 +87,34 @@ contract RiskBudgetTest is Test {
         assertEq(s.lastBlock, 100);
     }
 
-    function test_credit_keepsDeficit_growsCaps() public view {
+    function test_credit_scalesBudgetProportionally_growsCaps() public view {
         BudgetState memory s = _fresh();
         RiskBudget.charge(s, p, 1e15, 0);
-        uint256 deficit = s.bMax - s.budget;
+        uint256 b0 = s.budget;
+        uint256 m0 = s.bMax;
         RiskBudget.credit(s, p, 1e16, 1000e18);
         assertEq(s.bMax, p.bMax0 + 1e16 * p.k / 1e18);
-        assertEq(s.bMax - s.budget, deficit, "alpha never refills spent budget");
+        assertEq(s.budget, b0 * s.bMax / m0, "budget scaled by bMax'/bMax (floor)");
         assertEq(RiskBudget.depositCap(s, p), p.cap0 + 1000 * p.m);
+    }
+
+    function test_credit_atThreshold_keepsTier() public view {
+        BudgetState memory s = _fresh();
+        s.budget = p.bMax0 / 2; // exactly on the FULL threshold
+        for (uint256 g = 1; g < 8; ++g) {
+            RiskBudget.credit(s, p, g, 1);
+            assertEq(uint256(s.tier), uint256(Tier.FULL), "a 1-wei floor never demotes");
+        }
+    }
+
+    function test_kAboveOne_reverts() public {
+        RiskBudgetHarness h = new RiskBudgetHarness();
+        BudgetParams memory q = TenureDefaults.budgetParams();
+        q.k = 1e18;
+        h.validate(q); // k == 1 is the boundary and allowed
+        q.k = 1e18 + 1;
+        vm.expectRevert(RiskBudget.Tenure__ReputationGainTooHigh.selector);
+        h.validate(q);
     }
 
     function test_reputation_capped() public view {
@@ -128,7 +148,9 @@ contract RiskBudgetTest is Test {
                 RiskBudget.charge(s, p, (seed >> 32) % 1e16, (seed >> 96) % 1e21);
             } else if (op < 9) {
                 RiskBudget.refill(s, p, blk);
+                Tier t0 = s.tier;
                 RiskBudget.credit(s, p, (seed >> 32) % 1e15, (seed >> 96) % 1e21);
+                assertEq(uint256(s.tier), uint256(t0), "success never changes the tier");
             } else {
                 RiskBudget.refill(s, p, blk);
             }
@@ -167,5 +189,87 @@ contract RiskBudgetTest is Test {
         b1 = bound(b1, 0, bMax);
         b2 = bound(b2, b1, bMax);
         assertLe(uint256(RiskBudget.tierFor(b2, bMax, p)), uint256(RiskBudget.tierFor(b1, bMax, p)));
+    }
+
+    /// Positive-alpha settle never changes the tier; budget/bMax preserved within 1 wei, rounded down.
+    function testFuzz_creditKeepsTierAndRatio(uint256 budget, uint256 cum, uint256 gainWad, uint256 k) public view {
+        BudgetParams memory q = p;
+        q.k = bound(k, 0, 1e18);
+        BudgetState memory s = RiskBudget.init(q, 100);
+        s.cumAlphaWad = bound(cum, 0, 1e18);
+        s.bMax = RiskBudget.bMaxFor(s.cumAlphaWad, q);
+        s.budget = bound(budget, 0, s.bMax);
+        s.tier = RiskBudget.tierFor(s.budget, s.bMax, q);
+        gainWad = bound(gainWad, 0, 1e18);
+        Tier t0 = s.tier;
+        uint256 b0 = s.budget;
+        uint256 m0 = s.bMax;
+        RiskBudget.credit(s, q, gainWad, gainWad);
+        assertEq(uint256(s.tier), uint256(t0), "tier unchanged");
+        if (t0 == Tier.FROZEN) {
+            assertEq(s.budget, b0, "frozen budget untouched");
+        } else {
+            // b1/m1 <= b0/m0  and  b0/m0 - b1/m1 < 1/m1   <=>   b1*m0 <= b0*m1 < (b1+1)*m0
+            assertLe(s.budget * m0, b0 * s.bMax, "never rounds up");
+            assertLt(b0 * s.bMax, (s.budget + 1) * m0, "within 1 wei");
+        }
+        assertLe(s.budget, s.bMax);
+    }
+
+    /// Pump bound: an attacker who pays the vault X (manufactured alpha, as gainWad of NAV) gains at most X of
+    /// extra allowed loss before FROZEN. "Allowed loss" is measured exactly (binary search for the largest loss
+    /// that still leaves the curator un-frozen), so no discretization tolerance is needed. Net value never rises.
+    function testFuzz_pumpNeverProfitable(uint256 pumpWad, uint256 k, uint256 preLoss, uint256 cum) public view {
+        BudgetParams memory q = p;
+        q.k = bound(k, 0, 1e18);
+        pumpWad = bound(pumpWad, 1, 2e17);
+        BudgetState memory base = RiskBudget.init(q, 100);
+        RiskBudget.credit(base, q, bound(cum, 0, 1e17), 0); // some prior honest reputation
+        RiskBudget.charge(base, q, bound(preLoss, 0, base.bMax * 79 / 100), 0); // anywhere above FROZEN
+        vm.assume(base.tier != Tier.FROZEN);
+
+        BudgetState memory pumped = _copy(base);
+        RiskBudget.credit(pumped, q, pumpWad, 0);
+
+        uint256 allowed0 = _maxLossBeforeFrozen(base, q);
+        uint256 allowed1 = _maxLossBeforeFrozen(pumped, q);
+        assertLe(allowed1, allowed0 + pumpWad, "pumping never increases net extractable value");
+    }
+
+    /// Same bound, measured as a realistic slow bleed: many small charges until FROZEN. The bleed overshoots by at
+    /// most one step on each side, so the bound holds up to one step of granularity.
+    function testFuzz_pumpNeverProfitable_slowBleed(uint256 pumpWad, uint256 k) public view {
+        BudgetParams memory q = p;
+        q.k = bound(k, 0, 1e18);
+        pumpWad = bound(pumpWad, 1, 2e17);
+        uint256 step = 1e14;
+        BudgetState memory base = RiskBudget.init(q, 100);
+        BudgetState memory pumped = RiskBudget.init(q, 100);
+        RiskBudget.credit(pumped, q, pumpWad, 0);
+        uint256 n0 = _bleedSteps(base, q, step);
+        uint256 n1 = _bleedSteps(pumped, q, step);
+        assertLe(n1 * step, n0 * step + pumpWad + step, "slow bleed: extra loss <= pump (+1 step granularity)");
+    }
+
+    function _maxLossBeforeFrozen(BudgetState memory s, BudgetParams memory q) internal pure returns (uint256 lo) {
+        uint256 hi = s.budget + 1; // a loss >= budget always freezes (budget floors at 0)
+        while (lo + 1 < hi) {
+            uint256 mid = (lo + hi) / 2;
+            BudgetState memory t = _copy(s);
+            RiskBudget.charge(t, q, mid, 0);
+            if (t.tier == Tier.FROZEN) hi = mid;
+            else lo = mid;
+        }
+    }
+
+    function _bleedSteps(BudgetState memory s, BudgetParams memory q, uint256 step) internal pure returns (uint256 n) {
+        while (s.tier != Tier.FROZEN) {
+            RiskBudget.charge(s, q, step, 0);
+            ++n;
+        }
+    }
+
+    function _copy(BudgetState memory s) internal pure returns (BudgetState memory t) {
+        t = BudgetState(s.budget, s.bMax, s.lastBlock, s.tier, s.cumAlphaWad, s.cumAlphaValue);
     }
 }

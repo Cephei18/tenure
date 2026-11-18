@@ -89,4 +89,5 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - ACCEPTED: Positive alpha grows bMax and deposit cap but never refills budget; losses reduce cumulative positive alpha.
 - ACCEPTED: "Fraction of NAV moved" = value swapped between tokens; range moves without swaps are bounded by the distance-from-fair-price rule instead.
 - ACCEPTED: Hook exceeds 24KB in default profile; deploy with FOUNDRY_PROFILE=deploy.
+- M2.6: credit() keeps the tier (never recomputes it); k <= 1e18 is checked in RiskBudget.validate at registerPool, since BudgetParams are per pool, not constructor args.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->
