@@ -2,7 +2,12 @@
 
 Tasks the loop could not finish. Each entry: task id, approaches tried, error, hypothesis.
 
-## M3.3 Fees in alpha — BLOCKED on an existing gas assertion (needs a human decision)
+## M3.3 Fees in alpha — RESOLVED 2026-11-18
+Resolution: the human chose option (a). wip/m3.3-fees was merged into main; the gas assertion was raised to
+the higher of the default / deploy-profile measurements + 10%, with a comment pointing at M5.4. History of the
+blocker kept below for reference.
+
+### (resolved) M3.3 Fees in alpha — BLOCKED on an existing gas assertion (needed a human decision)
 Status: implementation complete and preserved on local branch `wip/m3.3-fees` (commit 88e6d2f). `main` is at the
 last green state (M3.2).
 What works on the branch: Python model first (fee_growth_delta, fee_amounts, estimate_fees, markout_alpha_fees),
