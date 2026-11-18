@@ -15,6 +15,7 @@ library DecisionScore {
     error Tenure__ZeroNav();
 
     uint256 internal constant WAD = 1e18;
+    uint256 internal constant Q128 = 1 << 128;
 
     /// @notice Immediate leakage L_imm = NAV(H_before) - NAV(H_after), both at the same fair price.
     /// @dev Positive = value lost during the session (bad swap, sandwiched remove/add, rebalancing while spot is off
@@ -42,8 +43,8 @@ library DecisionScore {
 
     /// @notice Markout alpha after the window: value of what the curator chose minus value of doing nothing.
     /// @dev H_new(T) = holdings(newRange at S_T) + idleNew; H_cf(T) = holdings(oldRange at S_T) + idleOld. Both valued
-    ///      at fair S*_T. The counterfactual is exact because CL holdings are path independent (fees ignored until
-    ///      stretch S1). Negative alpha = the decision destroyed value; being picked off shows up here because the
+    ///      at fair S*_T. The counterfactual is exact because CL holdings are path independent (fees: see
+    ///      markoutAlphaWithFees). Negative alpha = the decision destroyed value; being picked off shows up here because the
     ///      new range sits where spot diverged from fair.
     function markoutAlpha(
         Range memory oldRange,
@@ -58,6 +59,69 @@ library DecisionScore {
         Holdings memory hCf = PositionValue.holdings(oldRange, idleOld.amount0, idleOld.amount1, spotT, true);
         alpha = PositionValue.navAt(hNew, sqrtFairT, false).toInt256()
             - PositionValue.navAt(hCf, sqrtFairT, true).toInt256();
+    }
+
+    /// @notice Fee-growth delta between two snapshots of a v4 accumulator. Accumulators are uint256 that wrap by
+    ///         design, so the delta is taken mod 2^256 (unchecked), exactly as v4 does.
+    function feeGrowthDelta(uint256 nowX128, uint256 thenX128) internal pure returns (uint256 d) {
+        unchecked {
+            d = nowX128 - thenX128;
+        }
+    }
+
+    /// @notice Fees a hypothetical position (range, liquidity) earned between the record and settlement.
+    ///         tenure-math section 4b (M3.3).
+    /// @dev Exact when the range's fee-growth-inside is trustworthy: `insideValid` (both ticks initialized at
+    ///      settlement) and the inside delta <= the global delta for both tokens (an inside delta above the global
+    ///      one can only come from a tick that was cleared and re-initialized in between). Otherwise a
+    ///      curator-adverse fallback: the NEW position gets 0, the COUNTERFACTUAL gets liquidity * global delta (as if
+    ///      always in range: an upper bound). New fees round down, counterfactual fees round up.
+    /// @param dInside0 Fee growth inside the range over the window, token0 (X128 per unit liquidity).
+    /// @param dGlobal0 Global fee growth over the window, token0.
+    /// @param counterfactual True for the old range (H_cf), false for the new range (H_new).
+    function estimateFees(
+        uint256 dInside0,
+        uint256 dInside1,
+        uint256 dGlobal0,
+        uint256 dGlobal1,
+        uint128 liquidity,
+        bool insideValid,
+        bool counterfactual
+    ) internal pure returns (Holdings memory f) {
+        if (liquidity == 0) return f;
+        bool ok = insideValid && dInside0 <= dGlobal0 && dInside1 <= dGlobal1;
+        if (counterfactual) {
+            (uint256 d0, uint256 d1) = ok ? (dInside0, dInside1) : (dGlobal0, dGlobal1);
+            f.amount0 = FullMath.mulDivRoundingUp(d0, liquidity, Q128);
+            f.amount1 = FullMath.mulDivRoundingUp(d1, liquidity, Q128);
+        } else if (ok) {
+            f.amount0 = FullMath.mulDiv(dInside0, liquidity, Q128);
+            f.amount1 = FullMath.mulDiv(dInside1, liquidity, Q128);
+        }
+    }
+
+    /// @notice Markout alpha including LP fees: each side's estimated fees are added to its idle holdings.
+    /// @dev Why: without fees, honest liquidity provision scores as pure impermanent loss vs. staying idle, so an
+    ///      honest curator would bleed budget for doing its job. A no-op decision still scores exactly 0.
+    function markoutAlphaWithFees(
+        Range memory oldRange,
+        Holdings memory idleOld,
+        Holdings memory feesCf,
+        Range memory newRange,
+        Holdings memory idleNew,
+        Holdings memory feesNew,
+        uint160 spotT,
+        uint160 sqrtFairT
+    ) internal pure returns (int256) {
+        if (_sameRange(oldRange, newRange) && _sameIdle(idleOld, idleNew)) return 0;
+        return markoutAlpha(
+            oldRange,
+            Holdings(idleOld.amount0 + feesCf.amount0, idleOld.amount1 + feesCf.amount1),
+            newRange,
+            Holdings(idleNew.amount0 + feesNew.amount0, idleNew.amount1 + feesNew.amount1),
+            spotT,
+            sqrtFairT
+        );
     }
 
     /// @notice max(0, lossValue) as a WAD fraction of navRef, rounded UP (never under-charge the curator).

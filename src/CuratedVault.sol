@@ -153,29 +153,29 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
         return PoolKey(currency0, currency1, fee, tickSpacing, hook);
     }
 
-    /// @notice Total holdings in kind: the position's amounts at current spot (rounded down) plus idle balances.
+    /// @notice Total holdings in kind: the position's amounts at current spot (rounded down), idle balances, and the
+    ///         position's uncollected fees (which belong to shareholders and are collected on the next modify).
     function totalHoldings() public view returns (Holdings memory) {
-        return PositionValue.holdings(
-            hook.currentRange(poolId),
-            currency0.balanceOf(address(this)),
-            currency1.balanceOf(address(this)),
-            _spot(),
-            false
-        );
+        return _holdings(false);
     }
 
     /// @notice NAV in token1 units at the FAIR price. `roundUp` selects the rounding direction of both the position
     ///         amounts and the valuation, so callers can always round against whoever is being priced.
     function nav(bool roundUp) public view returns (uint256 value, uint160 fair) {
         fair = _fair();
-        Holdings memory h = PositionValue.holdings(
-            hook.currentRange(poolId),
-            currency0.balanceOf(address(this)),
-            currency1.balanceOf(address(this)),
+        value = PositionValue.navAt(_holdings(roundUp), fair, roundUp);
+    }
+
+    function _holdings(bool roundUp) internal view returns (Holdings memory) {
+        Range memory r = hook.currentRange(poolId);
+        Holdings memory owed = hook.feesOwedOn(poolId, r);
+        return PositionValue.holdings(
+            r,
+            currency0.balanceOf(address(this)) + owed.amount0,
+            currency1.balanceOf(address(this)) + owed.amount1,
             _spot(),
             roundUp
         );
-        value = PositionValue.navAt(h, fair, roundUp);
     }
 
     /// @notice Value of a deposit at the fair price (rounded down), in token1 units.
