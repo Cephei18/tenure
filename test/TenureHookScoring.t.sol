@@ -8,6 +8,7 @@ import {HookFixture} from "./utils/HookFixture.sol";
 import {SessionVault} from "./utils/TestActors.sol";
 import {TenureHook, RebalanceRecord} from "../src/TenureHook.sol";
 import {DecisionScore} from "../src/libraries/DecisionScore.sol";
+import {Holdings} from "../src/libraries/PositionValue.sol";
 import {BudgetState, Tier} from "../src/libraries/RiskBudget.sol";
 import {ReferencePriceLib} from "../src/libraries/ReferencePriceLib.sol";
 
@@ -253,7 +254,8 @@ contract TenureHookScoringTest is HookFixture {
         RebalanceRecord memory r = hook.recordOf(poolId, id);
         (uint160 spot,,,) = _slot0();
         (uint160 fair,) = oracle.getSqrtPriceX96(poolId);
-        return DecisionScore.markoutAlpha(r.oldRange, r.idleOld, r.newRange, r.idleNew, spot, fair);
+        (Holdings memory fCf, Holdings memory fNew) = hook.windowFees(poolId, id);
+        return DecisionScore.markoutAlphaWithFees(r.oldRange, r.idleOld, fCf, r.newRange, r.idleNew, fNew, spot, fair);
     }
 
     function _lastScore()

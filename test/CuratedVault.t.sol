@@ -156,7 +156,9 @@ contract CuratedVaultTest is VaultFixture {
         _curatorRebalance(-600, 600, L_RANGE, 0);
         _withdrawSome(ALICE, "FULL");
 
-        _leakUntil(Tier.RESTRICTED, LEAK);
+        // ~0.13% of NAV against a 0.2% budget => RESTRICTED. (Sized for the fee-inclusive H_before of M3.3: fees
+        // collected during a rebalance no longer mask part of the leak.)
+        _leakUntil(Tier.RESTRICTED, 3_000 ether);
         _withdrawSome(ALICE, "RESTRICTED");
 
         _leakUntil(Tier.FROZEN, LEAK / 2);

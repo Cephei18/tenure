@@ -16,6 +16,12 @@ from model import (
     Q96,
     RESTRICTED,
     WAD,
+    Q128,
+    U256,
+    estimate_fees,
+    fee_amounts,
+    fee_growth_delta,
+    markout_alpha_fees,
     BudgetParams,
     BudgetState,
     Position,
@@ -356,3 +362,45 @@ def test_random_walk_invariants(seed):
             s = restore(s, P, blk)
         assert 0 <= s.budget <= s.b_max <= P.b_max_cap
         assert s.b_max >= P.b_max0
+
+
+# ------------------------------------------------------------------------------------------- M3.3 fees in alpha
+def test_fee_growth_delta_wraps():
+    assert fee_growth_delta(5, 3) == 2
+    assert fee_growth_delta(1, U256 - 1) == 2  # accumulator wrapped past 2^256
+
+
+def test_fee_amounts_rounding():
+    d = Q128 // 3  # one third of a token per unit liquidity
+    assert fee_amounts(d, 0, 3, False)[0] == 0  # floor(3 * (Q128//3) / Q128) = 0
+    assert fee_amounts(d, 0, 3, True)[0] == 1
+    assert fee_amounts(Q128 * 7, Q128, 10, False) == (70, 10)
+
+
+def test_estimate_fees_exact_and_fallbacks():
+    di, dg = (Q128 * 2, Q128), (Q128 * 5, Q128 * 5)
+    assert estimate_fees(di, dg, 10, True, False) == (20, 10)
+    assert estimate_fees(di, dg, 10, True, True) == (20, 10)
+    # untrustworthy inside growth: new gets nothing, counterfactual gets the global upper bound
+    assert estimate_fees(di, dg, 10, False, False) == (0, 0)
+    assert estimate_fees(di, dg, 10, False, True) == (50, 50)
+    # inside > global is impossible for a continuously initialized range => treated as untrustworthy
+    bad = (Q128 * 6, Q128)
+    assert estimate_fees(bad, dg, 10, True, False) == (0, 0)
+    assert estimate_fees(bad, dg, 10, True, True) == (50, 50)
+    assert estimate_fees(di, dg, 0, False, True) == (0, 0)
+
+
+def test_alpha_fees_noop_is_zero_and_fees_count():
+    pos = Position(-600, 600, 10**24)
+    idle = (10**20, 10**20)
+    assert markout_alpha_fees(pos, idle, (5, 5), pos, idle, (0, 0), Q96, Q96) == 0
+    # entering a range from idle: without fees the IL makes alpha negative; enough fees flip it
+    empty = Position(-600, 600, 0)
+    s_t = sqrt_price_at_tick(300)
+    base = markout_alpha_fees(empty, (10**22, 10**22), (0, 0), pos, (0, 0), (0, 0), s_t, s_t)
+    fees = (10**21, 10**21)
+    with_fees = markout_alpha_fees(empty, (10**22, 10**22), (0, 0), pos, (0, 0), fees, s_t, s_t)
+    assert with_fees > base
+    # adding fees f to the new side raises alpha by NAV(f) up to rounding
+    assert with_fees - base >= nav(fees, s_t, False) - 2
