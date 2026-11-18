@@ -164,3 +164,17 @@ Decisions made:
 Notes for human: shares/NAV use hook views (currentRange, settingsOf, configs) so the vault and the hook agree on
 the position; the vault recomputes NAV with its own rounding direction rather than calling hook.navOf (which
 always rounds down).
+
+## 2026-11-18T16:10Z — M3.2 rebalance(params) — DONE
+What: end-to-end test (deposit -> rebalance with swap -> market swaps through the range -> re-range -> settle
+via settle() and via afterSwap -> partial withdraw with live position -> safe mode -> full exit). A per-token
+ledger checks after every step that the vault's idle balance == deposits - withdrawals + net PoolManager flows
+(measured independently as the PoolManager's token-balance change), and every user receives exactly the returned
+amounts; after safe mode, withdrawals equal floor(idle * shares / supply) exactly. Also: FROZEN curator's vault
+rebalance reverts with Tenure__Frozen while safe mode + withdraw still work; an unfundable rebalance reverts
+atomically (no position change, no record, no open session).
+Files: test/CuratedVaultE2E.t.sol (rebalance itself landed in M3.1)
+Tests: 3 added / 148 passing. Deploy build: src/ unchanged since M3.1 (deploy build OK there); test-only task.
+Decisions made: an unfundable rebalance surfaces the token's own balance-underflow panic rather than a custom
+error (the vault does not pre-compute amounts; the PoolManager/settle path is the source of truth).
+Notes for human: none
