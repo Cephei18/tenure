@@ -1,7 +1,7 @@
 """Generate deterministic differential-test vectors from the integer layer of sim/model.py.
 
 Run from the repo root:   python sim/gen_vectors.py
-Writes test/vectors/{holdings,nav,leakage,alpha,loss,budget}.json. Every number is a decimal STRING so uint256 / int256
+Writes test/vectors/{holdings,nav,leakage,alpha,loss,budget,fees}.json. Every number is a decimal STRING so uint256 / int256
 values survive JSON; forge's vm.parseJsonUint / parseJsonInt accept numeric strings.
 """
 
@@ -23,6 +23,10 @@ from model import (  # noqa: E402
     charge,
     credit,
     deposit_cap,
+    estimate_fees,
+    markout_alpha_fees,
+    Q128,
+    U256,
     gain_wad,
     holdings,
     init_state,
@@ -218,11 +222,58 @@ def gen_budget(rng):
     return seqs
 
 
+def gen_fees(rng):
+    """M3.3: fee estimation (exact / fallback, wrap-around deltas) and markout alpha with fees."""
+    cases = []
+    for i in range(N):
+        t = rng.randrange(-200_000, 200_000)
+        old = Position(*rand_range(rng, near=t), rand_liq(rng, huge_ok=False) if rng.random() < 0.85 else 0)
+        new = Position(*rand_range(rng, near=t + rng.randrange(-1000, 1000)), rand_liq(rng, huge_ok=False))
+        io = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
+        inew = (rng.randrange(0, 10**22), rng.randrange(0, 10**22))
+        if i < 8:
+            new, inew = old, io
+
+        def growth(liq):
+            # realistic: total fees F for this liquidity => delta = F * 2^128 / L
+            if liq == 0:
+                return rng.randrange(0, Q128 * 10**6)
+            return rng.randrange(0, 10**21) * Q128 // liq
+
+        g0 = rng.randrange(0, U256)  # accumulator snapshot at record time (any value; wraps)
+        g1 = rng.randrange(0, U256)
+        dg = (growth(min(old.liquidity or 10**24, new.liquidity or 10**24)) * 3, growth(10**24) * 3)
+        di_old = (rng.randrange(0, dg[0] + 1), rng.randrange(0, dg[1] + 1))
+        di_new = (rng.randrange(0, dg[0] + 1), rng.randrange(0, dg[1] + 1))
+        if rng.random() < 0.15:  # corrupted inside growth (tick re-initialized): inside > global
+            di_new = (dg[0] + rng.randrange(1, 10**30), di_new[1])
+        valid_old, valid_new = rng.random() < 0.6, rng.random() < 0.8
+        f_cf = estimate_fees(di_old, dg, old.liquidity, valid_old, True)
+        f_new = estimate_fees(di_new, dg, new.liquidity, valid_new, False)
+        t_end = t + rng.randrange(-3000, 3000)
+        s_t = sqrt_price_at_tick(t_end) + rng.randrange(0, 10**6)
+        fair_t = s_t if rng.random() < 0.3 else sqrt_price_at_tick(t_end + rng.randrange(-500, 500))
+        a = markout_alpha_fees(old, io, f_cf, new, inew, f_new, s_t, fair_t)
+        # store the raw accumulators (then, now) so Solidity exercises the unchecked wrap-around subtraction
+        cases.append({"old": pos_json(old), "new": pos_json(new), "idleOld0": s(io[0]), "idleOld1": s(io[1]),
+                      "idleNew0": s(inew[0]), "idleNew1": s(inew[1]),
+                      "gThen0": s(g0), "gThen1": s(g1),
+                      "gNow0": s((g0 + dg[0]) % U256), "gNow1": s((g1 + dg[1]) % U256),
+                      "oThen0": s(g0), "oThen1": s(g1),
+                      "oNow0": s((g0 + di_old[0]) % U256), "oNow1": s((g1 + di_old[1]) % U256),
+                      "nThen0": s(g1), "nThen1": s(g0),
+                      "nNow0": s((g1 + di_new[0]) % U256), "nNow1": s((g0 + di_new[1]) % U256),
+                      "validOld": valid_old, "validNew": valid_new,
+                      "feesCf0": s(f_cf[0]), "feesCf1": s(f_cf[1]), "feesNew0": s(f_new[0]), "feesNew1": s(f_new[1]),
+                      "sqrtSpotT": s(s_t), "sqrtFairT": s(fair_t), "alpha": s(a)})
+    return cases
+
+
 def main():
     rng = random.Random(SEED)
     os.makedirs(OUT, exist_ok=True)
     gens = [("holdings", gen_holdings), ("nav", gen_nav), ("leakage", gen_leakage), ("alpha", gen_alpha),
-            ("loss", gen_loss), ("budget", gen_budget)]
+            ("loss", gen_loss), ("budget", gen_budget), ("fees", gen_fees)]
     for name, fn in gens:
         cases = fn(rng)
         with open(os.path.join(OUT, f"{name}.json"), "w", newline="\n") as f:

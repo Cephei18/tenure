@@ -103,6 +103,7 @@ contract TenureHook is BaseHook {
     bytes32 internal constant NEWRANGE_SLOT = 0x91a39552ac870bd84550b1ff670fbd9576e38088668f0d566a8e0988b6a134b6;
 
     /// @notice Max records settled opportunistically per swap, and max records inspected (bounded afterSwap gas).
+    uint256 internal constant Q128 = 1 << 128;
     uint256 public constant MAX_AUTO_SETTLE = 3;
     uint256 public constant MAX_AUTO_SCAN = 6;
 
@@ -122,9 +123,21 @@ contract TenureHook is BaseHook {
     /// @notice What the hook saw when the session opened (H_before inputs + fair price).
     struct Snapshot {
         Range oldRange;
-        Holdings idle;
+        Holdings idle; // vault token balances + fees owed on the old position (H_before must include them)
         uint160 spot;
         uint160 fair;
+        uint256 fgOld0; // fee growth inside the old range at t (only meaningful if oldRange.liquidity > 0)
+        uint256 fgOld1;
+    }
+
+    /// @dev Fee-growth accumulators at record time t, for fee-aware markouts (M3.3).
+    struct FeeSnap {
+        uint256 global0;
+        uint256 global1;
+        uint256 old0; // inside the old range (counterfactual)
+        uint256 old1;
+        uint256 new0; // inside the new range
+        uint256 new1;
     }
 
     struct PendingMandate {
@@ -141,6 +154,7 @@ contract TenureHook is BaseHook {
     mapping(PoolId => Snapshot) internal _pending;
     mapping(PoolId => PendingMandate) internal _pendingMandate;
     mapping(PoolId => RebalanceRecord[]) internal _records;
+    mapping(PoolId => mapping(uint256 => FeeSnap)) internal _feeSnaps;
     mapping(PoolId => uint256) public settlePointer; // all records below are settled
     mapping(PoolId => uint256) public lastRebalanceBlock;
     mapping(PoolId => uint256) public restoreEta; // block; 0 = none requested
@@ -451,16 +465,27 @@ contract TenureHook is BaseHook {
         return _records[id].length;
     }
 
-    /// @notice Vault NAV in token1 units at the FAIR price (position at spot, rounded down + idle balances).
+    /// @notice Vault NAV in token1 units at the FAIR price (position at spot rounded down + idle + fees owed).
     /// @dev Used by the vault to price shares. Never values at spot.
     function navOf(PoolId id) external view returns (uint256 nav, uint160 fair) {
         PoolConfig storage c = configs[id];
         fair = ReferencePriceLib.readFresh(c.oracle, id, _settings[id].maxOracleAge);
         (uint160 spot,,,) = poolManager.getSlot0(id);
-        Holdings memory h = PositionValue.holdings(
-            currentRange(id), c.currency0.balanceOf(c.vault), c.currency1.balanceOf(c.vault), spot, false
-        );
+        Range memory r = currentRange(id);
+        Holdings memory idle = _idleWithFees(id, c, r);
+        Holdings memory h = PositionValue.holdings(r, idle.amount0, idle.amount1, spot, false);
         nav = PositionValue.navAt(h, fair, false);
+    }
+
+    /// @notice Uncollected LP fees owed to the vault on range `r` (v4's own formula; collected on the next modify).
+    function feesOwedOn(PoolId id, Range memory r) public view returns (Holdings memory h) {
+        if (r.tickLower == r.tickUpper) return h;
+        (uint128 l, uint256 last0, uint256 last1) =
+            poolManager.getPositionInfo(id, configs[id].vault, r.tickLower, r.tickUpper, bytes32(0));
+        if (l == 0) return h;
+        (uint256 in0, uint256 in1) = poolManager.getFeeGrowthInside(id, r.tickLower, r.tickUpper);
+        h.amount0 = FullMath.mulDiv(DecisionScore.feeGrowthDelta(in0, last0), l, Q128);
+        h.amount1 = FullMath.mulDiv(DecisionScore.feeGrowthDelta(in1, last1), l, Q128);
     }
 
     /// @notice |spot tick - fair tick| for the pool, using a fresh fair price.
@@ -557,7 +582,7 @@ contract TenureHook is BaseHook {
     function _settle(PoolId id, uint256 recordId, uint160 spot, uint160 fair) internal returns (int256 alpha) {
         RebalanceRecord storage r = _records[id][recordId];
         r.settled = true;
-        alpha = DecisionScore.markoutAlpha(r.oldRange, r.idleOld, r.newRange, r.idleNew, spot, fair);
+        alpha = _alphaWithFees(id, recordId, r, spot, fair);
         BudgetState memory b = _refilled(id);
         Tier before = b.tier;
         BudgetParams memory p = _settings[id].budget;
@@ -572,6 +597,89 @@ contract TenureHook is BaseHook {
         }
         _storeBudget(id, b, before);
         emit MarkoutSettled(id, recordId, alpha, lossW, gainW, b.budget, b.bMax, b.tier);
+    }
+
+    /// @dev Markout alpha with LP fees (M3.3): H_new and H_cf each get the fees their range earned over the window.
+    function _alphaWithFees(PoolId id, uint256 recordId, RebalanceRecord storage r, uint160 spot, uint160 fair)
+        internal
+        view
+        returns (int256)
+    {
+        Holdings[2] memory fees = _windowFees(id, recordId, r); // [counterfactual, new]
+        return
+            DecisionScore.markoutAlphaWithFees(
+                r.oldRange, r.idleOld, fees[0], r.newRange, r.idleNew, fees[1], spot, fair
+            );
+    }
+
+    /// @notice Fees credited to a record's counterfactual (old range) and new range as of now (tenure-math 4b).
+    /// @return feesCf Fees the old range would have earned since the record (curator-adverse estimate).
+    /// @return feesNew Fees the new range earned since the record (curator-adverse estimate).
+    function windowFees(PoolId id, uint256 recordId)
+        external
+        view
+        returns (Holdings memory feesCf, Holdings memory feesNew)
+    {
+        Holdings[2] memory f = _windowFees(id, recordId, _records[id][recordId]);
+        return (f[0], f[1]);
+    }
+
+    /// @dev Reads slot0 + globals once and each tick's info once (gross liquidity + fee growth outside in one call),
+    ///      then derives fee growth inside exactly like v4's StateLibrary.getFeeGrowthInside.
+    function _windowFees(PoolId id, uint256 recordId, RebalanceRecord storage r)
+        internal
+        view
+        returns (Holdings[2] memory fees)
+    {
+        FeeSnap memory f = _feeSnaps[id][recordId];
+        uint256[4] memory g; // [global0, global1, dGlobal0, dGlobal1]
+        (g[0], g[1]) = poolManager.getFeeGrowthGlobals(id);
+        g[2] = DecisionScore.feeGrowthDelta(g[0], f.global0);
+        g[3] = DecisionScore.feeGrowthDelta(g[1], f.global1);
+        (, int24 tick,,) = poolManager.getSlot0(id);
+        fees[0] = _fees(id, r.oldRange, f.old0, f.old1, g, tick, true);
+        fees[1] = _fees(id, r.newRange, f.new0, f.new1, g, tick, false);
+    }
+
+    /// @dev Fees the hypothetical position `r` earned since record time. Trust the range's fee-growth-inside only if
+    ///      both ticks are initialized now; DecisionScore.estimateFees also rejects an inside delta above the global
+    ///      one and applies the curator-adverse fallback.
+    function _fees(PoolId id, Range memory r, uint256 then0, uint256 then1, uint256[4] memory g, int24 tick, bool cf)
+        internal
+        view
+        returns (Holdings memory)
+    {
+        if (r.liquidity == 0) return Holdings(0, 0);
+        (uint256 in0, uint256 in1, bool initialized) = _insideGrowth(id, r, tick, g[0], g[1]);
+        return DecisionScore.estimateFees(
+            DecisionScore.feeGrowthDelta(in0, then0),
+            DecisionScore.feeGrowthDelta(in1, then1),
+            g[2],
+            g[3],
+            r.liquidity,
+            initialized,
+            cf
+        );
+    }
+
+    /// @dev v4's fee-growth-inside formula from one getTickInfo per tick; `initialized` = both ticks have liquidity.
+    function _insideGrowth(PoolId id, Range memory r, int24 tick, uint256 global0, uint256 global1)
+        internal
+        view
+        returns (uint256 in0, uint256 in1, bool initialized)
+    {
+        (uint128 gL,, uint256 lo0, uint256 lo1) = poolManager.getTickInfo(id, r.tickLower);
+        (uint128 gU,, uint256 up0, uint256 up1) = poolManager.getTickInfo(id, r.tickUpper);
+        initialized = gL != 0 && gU != 0;
+        unchecked {
+            if (tick < r.tickLower) {
+                (in0, in1) = (lo0 - up0, lo1 - up1);
+            } else if (tick >= r.tickUpper) {
+                (in0, in1) = (up0 - lo0, up1 - lo1);
+            } else {
+                (in0, in1) = (global0 - lo0 - up0, global1 - lo1 - up1);
+            }
+        }
     }
 
     function _advancePointer(PoolId id) internal {
@@ -589,7 +697,19 @@ contract TenureHook is BaseHook {
         (uint160 spot,,,) = poolManager.getSlot0(id);
         Range memory r = _currentRange[id];
         r.liquidity = _liquidityAt(id, c.vault, r.tickLower, r.tickUpper);
-        _pending[id] = Snapshot(r, Holdings(c.currency0.balanceOf(c.vault), c.currency1.balanceOf(c.vault)), spot, fair);
+        Holdings memory idle = _idleWithFees(id, c, r);
+        (uint256 fg0, uint256 fg1) =
+            r.liquidity == 0 ? (0, 0) : poolManager.getFeeGrowthInside(id, r.tickLower, r.tickUpper);
+        _pending[id] = Snapshot(r, idle, spot, fair, fg0, fg1);
+    }
+
+    /// @dev Vault token balances + fees owed on `r` (exactly what v4 would pay on the next modify of that position).
+    ///      Why: removing a position collects its fees into idle. If H_before excluded them, a rebalance could leak
+    ///      up to the accrued fees without any leakage being measured.
+    function _idleWithFees(PoolId id, PoolConfig storage c, Range memory r) internal view returns (Holdings memory h) {
+        h = feesOwedOn(id, r);
+        h.amount0 += c.currency0.balanceOf(c.vault);
+        h.amount1 += c.currency1.balanceOf(c.vault);
     }
 
     /// @dev Results of scoring one rebalance (memory struct keeps the stack shallow).
@@ -605,7 +725,7 @@ contract TenureHook is BaseHook {
         PoolConfig storage c = configs[id];
         Snapshot memory snap = _pending[id];
         Range memory newR = _resolveNewRange(id, c.vault, snap.oldRange);
-        Holdings memory idleNew = Holdings(c.currency0.balanceOf(c.vault), c.currency1.balanceOf(c.vault));
+        Holdings memory idleNew = _idleWithFees(id, c, newR);
         (uint160 spotAfter,,,) = poolManager.getSlot0(id);
 
         Score memory sc = _score(id, snap, newR, idleNew, spotAfter);
@@ -636,11 +756,19 @@ contract TenureHook is BaseHook {
             _records[id].push(
                 RebalanceRecord(snap.oldRange, newR, snap.idle, idleNew, sc.navBefore, uint64(block.number), false)
             );
+            _snapFees(id, sc.recordId, snap, newR);
         } else {
             sc.recordId = type(uint256).max; // empty vault: nothing at stake, nothing to mark out
         }
         _storeBudget(id, b, before);
         emit RebalanceScored(id, sc.recordId, sc.leak, sc.navBefore, sc.lossW, sc.movedW, b.budget, b.tier);
+    }
+
+    function _snapFees(PoolId id, uint256 recordId, Snapshot memory snap, Range memory newR) internal {
+        FeeSnap storage f = _feeSnaps[id][recordId];
+        (f.global0, f.global1) = poolManager.getFeeGrowthGlobals(id);
+        (f.old0, f.old1) = (snap.fgOld0, snap.fgOld1);
+        if (newR.liquidity != 0) (f.new0, f.new1) = poolManager.getFeeGrowthInside(id, newR.tickLower, newR.tickUpper);
     }
 
     /// @dev New range = the one range added to in this session, else the old ticks. Old liquidity must be fully
