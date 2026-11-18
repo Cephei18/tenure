@@ -304,3 +304,17 @@ Notes for human: the first sweep run printed identical numbers for every seed - 
 the test contract's `seed` variable. Fixed (seed set after each revert) and guarded by an assertion that
 different seeds produce different markets. On 5 seeds C goes FULL -> FROZEN without a sampled RESTRICTED block
 (two markouts settle in one block).
+
+## Handoff — 2026-11-18T22:10Z
+Where I stopped: after M4.2b (commit 9385ac5). main is green: 163 tests, sim 47, deploy build OK.
+Next: M4.2c contract-size headroom (need >= 2,000 B under 24,576; now 24,460 B = 116 B headroom).
+What I already measured (deploy profile, before FeesOwed/navOf removal, hook was 24,979 B): optimizer_runs 200 ->
+100 saved ~430 B, 100 -> 30 saved only ~70 B more. So runs alone cannot reach 2 KB; plan on moving code out:
+  - candidates: the fee-window logic (_windowFees/_exitedFees/_fees/_insideGrowth + windowFees view) and
+    _checkMandate/_score math into an external library with `public` functions, or a separate stateless
+    "TenureScorer" contract the hook calls (simpler to deploy than a linked library: no link step in
+    deployCodeTo). External calls add gas to settle: re-measure test_gas_afterSwap_dueRecords under BOTH
+    profiles; if it exceeds 213,240, record it under Decisions made (the task allows it) - do NOT loosen it
+    silently.
+  - Check `FOUNDRY_PROFILE=deploy forge build --sizes` after each step (a full via-IR build takes ~4 min).
+Then: M4.3 charts (CSV layouts are in the M4.2 handoff above), M4.4 demo script, M5.x hardening.
