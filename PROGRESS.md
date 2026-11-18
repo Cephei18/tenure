@@ -219,3 +219,31 @@ Next: M4.2 headline scenario. Building blocks are ready in test/scenario/Scenari
 Half-understood: positive-alpha settlements now scale the budget proportionally (M2.6); a poisoned curator that
 alternates park/follow may score positive alpha on some "park" records - harmless for tiers (credit never changes
 tier) but visible in the CSV.
+
+## 2026-11-18T19:30Z — M3.3 Fees in alpha — DONE (blocker resolved: option (a), human decision)
+What: merged wip/m3.3-fees. Holdings/NAV include uncollected fees (fixes leak masking); markout credits each side
+the fees its range earned (exact when readable; curator-adverse fallback otherwise). New in this step: when the
+vault abandons a range before its markout settles, the hook snapshots that range's fee growth at the exit point
+and compares both sides over [t, exit]. Gas bound on afterSwap-with-one-due-record raised per the decision.
+Files: src/TenureHook.sol, src/CuratedVault.sol, src/libraries/DecisionScore.sol, sim/*, test/vectors/fees.json,
+test/TenureHookFees.t.sol (new), test/TenureHookScoring.t.sol, test/diff/DecisionScoreDiff.t.sol,
+test/CuratedVault.t.sol, snapshots/TenureHook.{default,deploy}.json, docs/MATH.md, docs/THREAT_MODEL.md (new),
+.claude/skills/tenure-math/SKILL.md (section 4b), CLAUDE.md, PLAN.md (M5.4), BLOCKERS.md
+Tests: 8 added / 161 passing. sim 47 passed. Deploy profile compiled (gas test run under it).
+Gas (afterSwap overhead, one due record): default 193,854 / deploy 192,771 -> bound 213,240 (higher + 10%).
+Decisions made:
+- Acceptance run: seeded Market (fair walk +-40 ticks/block, noise trades up to 2,000 tokens, arbitrage to fair),
+  HonestCurator re-centering beyond 120 ticks, default budget (bMax0 2%, refill 2%/7200 blocks): 19 decisions,
+  FULL in all 500 blocks, minimum budget ratio 94.1%. The refill rate was NOT tuned.
+- The first run of that test failed (dropped to RESTRICTED). Diagnosis: the fee-free alpha of each re-center was
+  ~+-20 tokens, but ranges abandoned before settlement were credited 0 fees (ticks cleared) while the
+  counterfactual got the global upper bound (~300 tokens). That was an estimator bug in my M3.3 code, so I fixed
+  the measurement (exit snapshot) instead of tuning the refill rate, which would only have hidden it.
+- test_withdraw_inEveryTier first leak resized 4,000 -> 3,000 tokens: with fees no longer masking part of the
+  leak, the old size jumped straight past RESTRICTED. The test still walks FULL -> RESTRICTED -> FROZEN.
+Notes for human: the counterfactual fallback (old range abandoned -> L_old * global fee growth) is deliberately
+pessimistic for the curator; documented in docs/MATH.md as a known limitation.
+- Contract size: with the fee code TenureHook hit 24,979 B under via-IR (over EIP-170). Fixed without changing
+  behavior: removed the unused hook.navOf (the vault prices shares with its own nav(bool)), and moved fees-owed
+  (new src/libraries/FeesOwed.sol) and the spot/fair deviation check into the vault. Now 24,460 B (116 B headroom)
+  at the normal 200 runs. M5.4 adds code: it must make room (lower deploy optimizer_runs or move views out).

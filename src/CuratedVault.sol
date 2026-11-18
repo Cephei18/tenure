@@ -20,6 +20,8 @@ import {TenureHook} from "./TenureHook.sol";
 import {IReferencePrice} from "./interfaces/IReferencePrice.sol";
 import {ReferencePriceLib} from "./libraries/ReferencePriceLib.sol";
 import {PositionValue, Holdings, Range} from "./libraries/PositionValue.sol";
+import {FeesOwed} from "./libraries/FeesOwed.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 /// @title CuratedVault - a two-token vault whose single LP position is managed by an untrusted curator
 /// @notice Depositors hold shares priced at NAV at the FAIR price (never pool spot). The curator can only touch the
@@ -168,7 +170,7 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
 
     function _holdings(bool roundUp) internal view returns (Holdings memory) {
         Range memory r = hook.currentRange(poolId);
-        Holdings memory owed = hook.feesOwedOn(poolId, r);
+        Holdings memory owed = FeesOwed.owed(poolManager, poolId, address(this), r);
         return PositionValue.holdings(
             r,
             currency0.balanceOf(address(this)) + owed.amount0,
@@ -176,6 +178,18 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
             _spot(),
             roundUp
         );
+    }
+
+    /// @notice Uncollected LP fees owed to the vault on its current position (part of NAV).
+    function feesOwed() external view returns (Holdings memory) {
+        return FeesOwed.owed(poolManager, poolId, address(this), hook.currentRange(poolId));
+    }
+
+    /// @notice |spot tick - fair tick| using a fresh fair price (the deposit guard).
+    function spotFairDeviation() public view returns (uint256) {
+        int256 s = TickMath.getTickAtSqrtPrice(_spot());
+        int256 f = TickMath.getTickAtSqrtPrice(_fair());
+        return uint256(s > f ? s - f : f - s);
     }
 
     /// @notice Value of a deposit at the fair price (rounded down), in token1 units.
@@ -206,7 +220,7 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
     {
         if (receiver == address(0)) revert Tenure__ZeroAddress();
         if (amount0 == 0 && amount1 == 0) revert Tenure__ZeroAmount();
-        uint256 dev = hook.spotFairDeviation(poolId);
+        uint256 dev = spotFairDeviation();
         if (dev > maxDepositDeviation) revert Tenure__SpotDeviation(dev, maxDepositDeviation);
 
         (uint256 navBefore, uint160 fair) = nav(true);

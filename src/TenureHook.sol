@@ -18,6 +18,7 @@ import {IReferencePrice} from "./interfaces/IReferencePrice.sol";
 import {ReferencePriceLib} from "./libraries/ReferencePriceLib.sol";
 import {PositionValue, Holdings, Range} from "./libraries/PositionValue.sol";
 import {DecisionScore} from "./libraries/DecisionScore.sol";
+import {FeesOwed} from "./libraries/FeesOwed.sol";
 import {RiskBudget, BudgetParams, BudgetState, Tier} from "./libraries/RiskBudget.sol";
 
 /// @notice Depositor-agreed bounds on what the curator may do. Tick-denominated so they are price-scale free.
@@ -103,7 +104,6 @@ contract TenureHook is BaseHook {
     bytes32 internal constant NEWRANGE_SLOT = 0x91a39552ac870bd84550b1ff670fbd9576e38088668f0d566a8e0988b6a134b6;
 
     /// @notice Max records settled opportunistically per swap, and max records inspected (bounded afterSwap gas).
-    uint256 internal constant Q128 = 1 << 128;
     uint256 public constant MAX_AUTO_SETTLE = 3;
     uint256 public constant MAX_AUTO_SCAN = 6;
 
@@ -128,6 +128,8 @@ contract TenureHook is BaseHook {
         uint160 fair;
         uint256 fgOld0; // fee growth inside the old range at t (only meaningful if oldRange.liquidity > 0)
         uint256 fgOld1;
+        uint256 global0; // global fee growth at the snapshot (the exit point of the range being left)
+        uint256 global1;
     }
 
     /// @dev Fee-growth accumulators at record time t, for fee-aware markouts (M3.3).
@@ -138,6 +140,13 @@ contract TenureHook is BaseHook {
         uint256 old1;
         uint256 new0; // inside the new range
         uint256 new1;
+        // Set when the vault abandons the new range before settlement: fee growth at that moment (the ticks were
+        // still initialized, so it is exact). Both sides are then compared over the observed interval [t, exit].
+        bool exited;
+        uint256 exitGlobal0;
+        uint256 exitGlobal1;
+        uint256 exitNew0;
+        uint256 exitNew1;
     }
 
     struct PendingMandate {
@@ -379,6 +388,14 @@ contract TenureHook is BaseHook {
     function beginSafeMode(PoolKey calldata key) external onlyVault(key.toId()) {
         PoolId id = key.toId();
         if (_session(id) != SESSION_NONE) revert Tenure__SessionOpen();
+        Range memory r = _currentRange[id];
+        r.liquidity = _liquidityAt(id, configs[id].vault, r.tickLower, r.tickUpper);
+        if (r.liquidity != 0) {
+            Snapshot storage p = _pending[id];
+            p.oldRange = r;
+            (p.fgOld0, p.fgOld1) = poolManager.getFeeGrowthInside(id, r.tickLower, r.tickUpper);
+            (p.global0, p.global1) = poolManager.getFeeGrowthGlobals(id);
+        }
         _setSession(id, SESSION_SAFE);
         emit SessionOpened(id, SESSION_SAFE, 0, 0);
     }
@@ -389,6 +406,7 @@ contract TenureHook is BaseHook {
         if (_session(id) != SESSION_SAFE) revert Tenure__WrongSession();
         Range memory r = _currentRange[id];
         if (_liquidityAt(id, configs[id].vault, r.tickLower, r.tickUpper) != 0) revert Tenure__SafeModeMustExit();
+        if (liquidityRemoved != 0) _markExit(id, _pending[id]);
         _setSession(id, SESSION_NONE);
         emit SafeModeEntered(id, liquidityRemoved);
         emit SessionClosed(id, SESSION_SAFE);
@@ -463,36 +481,6 @@ contract TenureHook is BaseHook {
     /// @notice Number of rebalance records for a pool.
     function recordCount(PoolId id) external view returns (uint256) {
         return _records[id].length;
-    }
-
-    /// @notice Vault NAV in token1 units at the FAIR price (position at spot rounded down + idle + fees owed).
-    /// @dev Used by the vault to price shares. Never values at spot.
-    function navOf(PoolId id) external view returns (uint256 nav, uint160 fair) {
-        PoolConfig storage c = configs[id];
-        fair = ReferencePriceLib.readFresh(c.oracle, id, _settings[id].maxOracleAge);
-        (uint160 spot,,,) = poolManager.getSlot0(id);
-        Range memory r = currentRange(id);
-        Holdings memory idle = _idleWithFees(id, c, r);
-        Holdings memory h = PositionValue.holdings(r, idle.amount0, idle.amount1, spot, false);
-        nav = PositionValue.navAt(h, fair, false);
-    }
-
-    /// @notice Uncollected LP fees owed to the vault on range `r` (v4's own formula; collected on the next modify).
-    function feesOwedOn(PoolId id, Range memory r) public view returns (Holdings memory h) {
-        if (r.tickLower == r.tickUpper) return h;
-        (uint128 l, uint256 last0, uint256 last1) =
-            poolManager.getPositionInfo(id, configs[id].vault, r.tickLower, r.tickUpper, bytes32(0));
-        if (l == 0) return h;
-        (uint256 in0, uint256 in1) = poolManager.getFeeGrowthInside(id, r.tickLower, r.tickUpper);
-        h.amount0 = FullMath.mulDiv(DecisionScore.feeGrowthDelta(in0, last0), l, Q128);
-        h.amount1 = FullMath.mulDiv(DecisionScore.feeGrowthDelta(in1, last1), l, Q128);
-    }
-
-    /// @notice |spot tick - fair tick| for the pool, using a fresh fair price.
-    function spotFairDeviation(PoolId id) external view returns (uint256) {
-        uint160 fair = ReferencePriceLib.readFresh(configs[id].oracle, id, _settings[id].maxOracleAge);
-        (uint160 spot,,,) = poolManager.getSlot0(id);
-        return _tickDistance(spot, fair);
     }
 
     // ================================================================================================ callbacks
@@ -631,7 +619,8 @@ contract TenureHook is BaseHook {
         view
         returns (Holdings[2] memory fees)
     {
-        FeeSnap memory f = _feeSnaps[id][recordId];
+        FeeSnap storage f = _feeSnaps[id][recordId];
+        if (f.exited) return _exitedFees(f, r);
         uint256[4] memory g; // [global0, global1, dGlobal0, dGlobal1]
         (g[0], g[1]) = poolManager.getFeeGrowthGlobals(id);
         g[2] = DecisionScore.feeGrowthDelta(g[0], f.global0);
@@ -639,6 +628,18 @@ contract TenureHook is BaseHook {
         (, int24 tick,,) = poolManager.getSlot0(id);
         fees[0] = _fees(id, r.oldRange, f.old0, f.old1, g, tick, true);
         fees[1] = _fees(id, r.newRange, f.new0, f.new1, g, tick, false);
+    }
+
+    /// @dev The new range was abandoned before settlement: compare both sides over [t, exit]. The new range's fees
+    ///      are exact; the old range shares them only if it is the same range, else gets the global upper bound.
+    function _exitedFees(FeeSnap storage f, RebalanceRecord storage r) internal view returns (Holdings[2] memory fees) {
+        uint256 dg0 = DecisionScore.feeGrowthDelta(f.exitGlobal0, f.global0);
+        uint256 dg1 = DecisionScore.feeGrowthDelta(f.exitGlobal1, f.global1);
+        uint256 dn0 = DecisionScore.feeGrowthDelta(f.exitNew0, f.new0);
+        uint256 dn1 = DecisionScore.feeGrowthDelta(f.exitNew1, f.new1);
+        bool same = r.oldRange.tickLower == r.newRange.tickLower && r.oldRange.tickUpper == r.newRange.tickUpper;
+        fees[0] = DecisionScore.estimateFees(dn0, dn1, dg0, dg1, r.oldRange.liquidity, same, true);
+        fees[1] = DecisionScore.estimateFees(dn0, dn1, dg0, dg1, r.newRange.liquidity, true, false);
     }
 
     /// @dev Fees the hypothetical position `r` earned since record time. Trust the range's fee-growth-inside only if
@@ -700,14 +701,32 @@ contract TenureHook is BaseHook {
         Holdings memory idle = _idleWithFees(id, c, r);
         (uint256 fg0, uint256 fg1) =
             r.liquidity == 0 ? (0, 0) : poolManager.getFeeGrowthInside(id, r.tickLower, r.tickUpper);
-        _pending[id] = Snapshot(r, idle, spot, fair, fg0, fg1);
+        (uint256 g0, uint256 g1) = poolManager.getFeeGrowthGlobals(id);
+        _pending[id] = Snapshot(r, idle, spot, fair, fg0, fg1, g0, g1);
+    }
+
+    /// @dev The vault is abandoning range `snap.oldRange` (re-range, exit to idle, safe mode). If the latest record
+    ///      placed that range, store its exact fee growth at this exit point (tenure-math 4b): after the vault
+    ///      leaves, the ticks are cleared and the range's fees could no longer be read at settlement.
+    function _markExit(PoolId id, Snapshot memory snap) internal {
+        uint256 n = _records[id].length;
+        if (n == 0 || snap.oldRange.liquidity == 0) return;
+        RebalanceRecord storage last = _records[id][n - 1];
+        if (
+            last.settled || last.newRange.liquidity == 0 || last.newRange.tickLower != snap.oldRange.tickLower
+                || last.newRange.tickUpper != snap.oldRange.tickUpper
+        ) return;
+        FeeSnap storage f = _feeSnaps[id][n - 1];
+        f.exited = true;
+        (f.exitGlobal0, f.exitGlobal1) = (snap.global0, snap.global1);
+        (f.exitNew0, f.exitNew1) = (snap.fgOld0, snap.fgOld1);
     }
 
     /// @dev Vault token balances + fees owed on `r` (exactly what v4 would pay on the next modify of that position).
     ///      Why: removing a position collects its fees into idle. If H_before excluded them, a rebalance could leak
     ///      up to the accrued fees without any leakage being measured.
     function _idleWithFees(PoolId id, PoolConfig storage c, Range memory r) internal view returns (Holdings memory h) {
-        h = feesOwedOn(id, r);
+        h = FeesOwed.owed(poolManager, id, c.vault, r);
         h.amount0 += c.currency0.balanceOf(c.vault);
         h.amount1 += c.currency1.balanceOf(c.vault);
     }
@@ -728,6 +747,10 @@ contract TenureHook is BaseHook {
         Holdings memory idleNew = _idleWithFees(id, c, newR);
         (uint160 spotAfter,,,) = poolManager.getSlot0(id);
 
+        if (
+            newR.liquidity == 0 || newR.tickLower != snap.oldRange.tickLower
+                || newR.tickUpper != snap.oldRange.tickUpper
+        ) _markExit(id, snap);
         Score memory sc = _score(id, snap, newR, idleNew, spotAfter);
 
         _currentRange[id] = Range(newR.tickLower, newR.tickUpper, 0);

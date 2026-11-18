@@ -216,7 +216,9 @@ contract TenureHookScoringTest is HookFixture {
         console2.log("swap gas, 0 due records:", g0);
         console2.log("swap gas, 1 due record :", g1);
         console2.log("swap gas, 3 due records:", g3);
-        assertLt(g1 - g0, 150_000, "one settlement is cheap");
+        // Raised from 150k by human decision (M3.3): fee measurement requires extra cold reads of pool state.
+        // Reduction tracked in M5.4. Bound = max(default 193,854; deploy/via-IR 192,771) + 10% = 213,240.
+        assertLt(g1 - g0, 213_240, "one fee-aware settlement is bounded");
         assertLt(g3 - g0, 400_000, "bounded: at most MAX_AUTO_SETTLE settlements per swap");
     }
 
@@ -233,7 +235,8 @@ contract TenureHookScoringTest is HookFixture {
     function _gasOfSmallSwap(string memory name) internal returns (uint256 g) {
         bool zf1 = (vm.getBlockNumber() % 2) == 0;
         swapper.swapTo(key, zf1, 1 ether, zf1 ? _sqrt(-100) : _sqrt(100));
-        g = vm.snapshotGasLastCall("TenureHook", name);
+        // Snapshot file is named per build profile: snapshots/TenureHook.<FOUNDRY_PROFILE>.json
+        g = vm.snapshotGasLastCall(string.concat("TenureHook.", vm.envOr("FOUNDRY_PROFILE", string("default"))), name);
     }
 
     /// n cheap re-ranges at fair, alternating ranges, respecting the cooldown.

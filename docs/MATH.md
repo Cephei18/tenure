@@ -58,3 +58,22 @@ priced at NAV at the fair price, and every loss on them is still charged to the 
 - `testFuzz_creditKeepsTierAndRatio`: the tier never changes on credit; `b1*m0 <= b0*m1 < (b1+1)*m0`.
 - `test/TenureHook.t.sol::test_register_reputationGainAboveOne_reverts`: the hook rejects `k = 1e18 + 1`.
 - `sim/test_model.py::test_pump_never_profitable`: the same property in the Python reference model.
+
+## LP fees in the markout (M3.3)
+
+Without fees, honest liquidity provision scores as pure impermanent loss against the counterfactual, so an honest
+curator would bleed budget simply for doing its job. Each side of the markout is therefore credited the fees its
+range earned over the window: `fees = L * dFeeGrowthInside / 2^128` (fee growth accumulators wrap mod 2^256).
+
+The counterfactual range usually no longer exists (the vault was often its only LP, so its ticks were cleared),
+so its fee growth cannot be read. The rules, from most to least exact:
+1. The range's ticks are initialized at settlement and `dInside <= dGlobal`: exact.
+2. The new range was abandoned before settlement: its fee growth was snapshotted at the exit point. Both sides are
+   compared over `[t, exit]`; the new side is exact, the old side shares its growth if it is the same range,
+   otherwise it gets the upper bound `L_old * dGlobal`.
+3. Otherwise: new -> 0, counterfactual -> `L_old * dGlobal` (curator-adverse).
+
+Rounding: new fees down, counterfactual fees up. Known limitation: rule 3's upper bound penalizes a curator whose
+abandoned old range would in truth have gone out of range; it never favors the curator.
+Evidence: `test/diff/DecisionScoreDiff.t.sol::test_diff_feesAlpha` (240 vectors, exact),
+`test/TenureHookFees.t.sol` (exactness vs v4's owed fees, exit snapshot, fallback, 500-block honest run).

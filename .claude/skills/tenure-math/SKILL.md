@@ -23,7 +23,7 @@ else:       amount0 = L * (B - S) / (S * B) * Q96      amount1 = L * (S - A) / Q
 ```
 In Solidity use v4-core `SqrtPriceMath.getAmount0Delta(lower, upper, L, roundUp)` and
 `getAmount1Delta(lower, upper, L, roundUp)` with the clamped bounds above. Do not hand-roll these.
-Holdings of the vault `H = position amounts + idle token balances (+ fees owed, stretch S1)`.
+Holdings of the vault `H = position amounts + idle token balances + fees owed` (section 4b).
 **Key property:** holdings at a given S are path-independent (ignoring fees). This is why we can compute the
 counterfactual "if the curator had not rebalanced" exactly.
 
@@ -53,6 +53,19 @@ alpha    = NAV(H_new(T), S*_T) - NAV(H_cf(T), S*_T)
 Negative alpha = the decision destroyed value vs doing nothing. Being picked off by an attacker shows up because the
 new range sits where spot diverges from fair. Known limitation (document it, don't hide it): S_T itself is affected by
 the curator's own liquidity (second-order), fees are excluded until M3.3 (fees in alpha).
+
+## 4b. LP fees in the markout (M3.3)
+Holdings include uncollected fees owed on the vault position (exactly v4's formula), in H_before, H_after and NAV.
+At settlement each side gets the fees its range earned since the record:
+```
+fees(range, L) = L * dInside / 2^128         dInside = feeGrowthInside(T) - feeGrowthInside(t)   (mod 2^256)
+H_new(T) += feesNew   (round DOWN)           H_cf(T) += feesCf   (round UP)
+```
+- Exact when trustworthy: both ticks initialized at settlement and dInside <= dGlobal (per token).
+- New range abandoned before settlement: the hook snapshots its fee growth at the exit point; both sides are
+  compared over [t, exit]. New = exact; cf = same growth if same ticks, else L_old * dGlobal[t, exit].
+- Otherwise curator-adverse fallback: new -> 0, cf -> L_old * dGlobal (as if always in range).
+- A no-op decision (same range, same idle) still scores exactly 0.
 
 ## 5. Loss charged to the budget
 ```
