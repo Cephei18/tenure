@@ -101,9 +101,9 @@ ACCEPTED decisions:
   so budget/bMax is unchanged. Success never changes the tier; only time refill (or guardian restore from FROZEN)
   does. Reputation gain factor k must satisfy k <= 1e18 (WAD), enforced in the constructor
   (Tenure__ReputationGainTooHigh). Pump bound: each unit of alpha an attacker manufactures by paying the vault buys
-  at most k <= 1 unit of extra allowed loss, so pumping is never profitable. NOTE: until PLAN task M2.6 is [x],
-  RiskBudget.sol and sim/model.py still implement the old additive rule; M2.6 brings them into line with this
-  section.
+  at most k <= 1 unit of extra allowed loss, so pumping is never profitable (argument in docs/MATH.md). The tier is
+  kept, not recomputed, on credit, so the 1-wei floor cannot demote a curator sitting exactly on a threshold.
+  k is a per-pool BudgetParams field, so the check lives in RiskBudget.validate (run by registerPool).
 - Losses reduce cumulative positive alpha (saturating at 0), so reputation is net of losses and bMax / deposit
   cap can shrink back toward their base values.
 

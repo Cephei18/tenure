@@ -1,6 +1,7 @@
 """Hand-checked tests for the Tenure reference model. Run: python -m pytest sim -q"""
 
 import random
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
@@ -16,6 +17,7 @@ from model import (
     RESTRICTED,
     WAD,
     BudgetParams,
+    BudgetState,
     Position,
     b_max_for,
     charge,
@@ -37,6 +39,7 @@ from model import (
     restore,
     sqrt_price_at_tick,
     tier_for,
+    validate,
 )
 
 L = 10**18
@@ -269,14 +272,54 @@ def test_restore_lands_restricted():
     assert s.last_block == 5
 
 
-def test_credit_grows_bmax_but_keeps_deficit():
+def test_credit_scales_budget_proportionally():
     s = init_state(P, 0)
     s = charge(s, P, 10**15, 0)
-    deficit = s.b_max - s.budget
     s2 = credit(s, P, 10**16, 1000 * 10**18)
     assert s2.b_max == P.b_max0 + 10**16 * P.k // WAD
-    assert s2.b_max - s2.budget == deficit
+    assert s2.budget == s.budget * s2.b_max // s.b_max
+    # ratio preserved within 1 wei, rounded down (never up)
+    r0 = Fraction(s.budget, s.b_max)
+    r1 = Fraction(s2.budget, s2.b_max)
+    assert r1 <= r0 and (r0 - r1) * s2.b_max < 1
+    assert s2.tier == s.tier
     assert deposit_cap(s2, P) == P.cap0 + P.m * 1000
+
+
+def test_credit_never_changes_tier_at_threshold():
+    # budget exactly at the FULL threshold: a floor in the scaling must not demote it
+    s = BudgetState(budget=P.b_max0 // 2, b_max=P.b_max0, last_block=0, tier=FULL)
+    for gw in (1, 3, 7, 10**15 + 1):
+        s2 = credit(s, P, gw, 1)
+        assert s2.tier == FULL
+
+
+def test_k_above_one_rejected():
+    validate(P)
+    validate(replace(P, k=WAD))
+    with pytest.raises(ValueError):
+        validate(replace(P, k=WAD + 1))
+
+
+def test_pump_never_profitable():
+    """Attacker pays the vault X (manufactured alpha X), then bleeds the vault until FROZEN.
+    Extra extractable loss must not exceed X."""
+    nav = 10**24
+    for frac in (10**15, 5 * 10**15, 3 * 10**16):
+        base = _extract_until_frozen(init_state(P, 0), nav)
+        x_value = frac * nav // WAD
+        pumped = credit(init_state(P, 0), P, frac, x_value)
+        extra = _extract_until_frozen(pumped, nav) - base
+        assert extra <= x_value
+
+
+def _extract_until_frozen(s, nav):
+    step = 10**14
+    total = 0
+    while s.tier != FROZEN:
+        s = charge(s, P, step, step * nav // WAD)
+        total += step * nav // WAD
+    return total
 
 
 def test_reputation_capped():
@@ -306,9 +349,9 @@ def test_random_walk_invariants(seed):
             s = charge(s, P, rng.randrange(0, 10**16), rng.randrange(0, 10**18))
             assert not was_frozen or s.tier == FROZEN
         elif op < 0.9:
-            was_frozen = s.tier == FROZEN
+            tier_before = s.tier
             s = credit(s, P, rng.randrange(0, 10**15), rng.randrange(0, 10**18))
-            assert not was_frozen or s.tier == FROZEN
+            assert s.tier == tier_before  # success never changes the tier
         elif s.tier == FROZEN:
             s = restore(s, P, blk)
         assert 0 <= s.budget <= s.b_max <= P.b_max_cap

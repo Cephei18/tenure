@@ -64,7 +64,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   Guardian `restore()` after a timelock. Events.
   _Accept:_ tests for each transition FULL->RESTRICTED->FROZEN->restored.
 
-- [ ] **M2.6 Proportional budget scaling + pump bound.** When bMax grows from positive alpha, scale budget by
+- [x] **M2.6 Proportional budget scaling + pump bound.** When bMax grows from positive alpha, scale budget by
   bMax_new / bMax_old (floor) so budget/bMax is unchanged; success never changes tier, only time refill or guardian
   restore does. Enforce k <= 1e18 in the constructor (Tenure__ReputationGainTooHigh). Update sim/model.py first,
   regenerate vectors, then RiskBudget.sol.

@@ -121,7 +121,7 @@ contract TenureHookScoringTest is HookFixture {
     }
 
     /// Dodging impermanent loss: exit the range to idle right before a move => positive alpha => reputation grows,
-    /// but the budget deficit is NOT refilled.
+    /// but the budget is only scaled (budget/bMax unchanged), never refilled.
     function test_goodExit_positiveAlpha_growsReputationOnly() public {
         _rebalance(_ops1(-600, 600, int128(L))); // record 0
         vm.roll(vm.getBlockNumber() + 10);
@@ -139,7 +139,8 @@ contract TenureHookScoringTest is HookFixture {
 
         BudgetState memory b1 = hook.budgetOf(poolId);
         assertGt(b1.bMax, b0.bMax, "bMax grows with proven alpha");
-        assertEq(b1.bMax - b1.budget, b0.bMax - b0.budget, "deficit unchanged: alpha never refills budget");
+        assertEq(b1.budget, b0.budget * b1.bMax / b0.bMax, "budget scaled proportionally: no refill");
+        assertEq(uint256(b1.tier), uint256(b0.tier), "success never changes the tier");
         assertGt(hook.depositCap(poolId), cap0, "deposit cap grows with proven alpha");
         assertEq(b1.cumAlphaValue, uint256(alpha));
     }

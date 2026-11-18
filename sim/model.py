@@ -254,6 +254,13 @@ class BudgetState:
     cum_alpha_value: int = 0
 
 
+def validate(p: BudgetParams) -> None:
+    """Mirror of RiskBudget.validate's reputation check. k <= 1 (WAD) is the pump bound: a unit of alpha an
+    attacker manufactures by paying the vault can buy at most one unit of extra allowed loss."""
+    if p.k > WAD:
+        raise ValueError("Tenure__ReputationGainTooHigh")
+
+
 def init_state(p: BudgetParams, block: int) -> BudgetState:
     return BudgetState(budget=p.b_max0, b_max=p.b_max0, last_block=block, tier=FULL)
 
@@ -300,22 +307,17 @@ def charge(s: BudgetState, p: BudgetParams, loss_w: int, loss_value: int) -> Bud
 
 
 def credit(s: BudgetState, p: BudgetParams, gain_w: int, gain_value: int) -> BudgetState:
-    """Positive alpha grows reputation (bMax, deposit cap). It never refills spent budget: the deficit
-    bMax - budget is unchanged (the new headroom is added to both), and nothing changes budget while FROZEN."""
+    """Positive alpha grows reputation (bMax, deposit cap). It never refills spent budget: the budget is scaled
+    proportionally, budget' = floor(budget * bMax' / bMax), so budget/bMax is unchanged (within 1 wei, rounded
+    down). Success never changes the tier (the tier is kept as-is, so a 1-wei floor cannot demote it either);
+    only time refill or guardian restore does. While FROZEN only reputation changes, not the budget."""
     cum_w = s.cum_alpha_wad + gain_w
     cum_v = s.cum_alpha_value + gain_value
     b_max = b_max_for(cum_w, p)
     if s.tier == FROZEN:
         return replace(s, b_max=b_max, cum_alpha_wad=cum_w, cum_alpha_value=cum_v)
-    budget = s.budget + (b_max - s.b_max)
-    return replace(
-        s,
-        budget=budget,
-        b_max=b_max,
-        tier=tier_for(budget, b_max, p),
-        cum_alpha_wad=cum_w,
-        cum_alpha_value=cum_v,
-    )
+    budget = mul_div(s.budget, b_max, s.b_max)  # floor: curator-adverse
+    return replace(s, budget=budget, b_max=b_max, cum_alpha_wad=cum_w, cum_alpha_value=cum_v)
 
 
 def restore(s: BudgetState, p: BudgetParams, block: int) -> BudgetState:

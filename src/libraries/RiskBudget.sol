@@ -39,11 +39,15 @@ struct BudgetState {
 /// @dev tenure-math sections 6-7. Pure functions over memory structs; mirrored exactly by sim/model.py.
 ///      Design choices (docs/MATH.md):
 ///      - FROZEN is sticky: no refill while frozen; only guardian restore() leaves it, landing in RESTRICTED.
-///      - Positive alpha never refills spent budget. It grows bMax and the budget by the same delta, so the deficit
-///        (bMax - budget) is unchanged and the tier cannot drop merely because bMax grew.
+///      - Positive alpha never refills spent budget. When it grows bMax, the budget is scaled proportionally
+///        (budget' = floor(budget * bMax' / bMax)) so budget/bMax is unchanged and the tier is kept: success never
+///        changes the tier; only time refill or guardian restore does.
+///      - Pump bound: k <= 1 (WAD). Manufacturing alpha X by paying the vault buys at most k * X <= X of extra
+///        allowed loss, so pumping reputation is never profitable (docs/MATH.md).
 ///      - Losses decay reputation first (net alpha), then drain the budget, floored at zero.
 library RiskBudget {
     error Tenure__InvalidBudgetParams();
+    error Tenure__ReputationGainTooHigh();
 
     uint256 internal constant WAD = 1e18;
 
@@ -54,6 +58,7 @@ library RiskBudget {
                 || p.restrictedThreshold >= p.fullThreshold || p.fullThreshold > WAD
                 || p.restoreWad < p.restrictedThreshold || p.restoreWad >= p.fullThreshold || p.cap0 > p.capMax
         ) revert Tenure__InvalidBudgetParams();
+        if (p.k > WAD) revert Tenure__ReputationGainTooHigh();
     }
 
     /// @notice Fresh state: full bucket of bMax0, FULL tier.
@@ -107,18 +112,16 @@ library RiskBudget {
         if (s.tier != Tier.FROZEN) s.tier = tierFor(s.budget, s.bMax, p);
     }
 
-    /// @notice Credit positive alpha to reputation. Never refills spent budget (deficit preserved).
+    /// @notice Credit positive alpha to reputation. Never refills spent budget and never changes the tier.
+    /// @dev budget' = floor(budget * bMax' / bMax): the ratio budget/bMax is preserved within 1 wei, rounded down
+    ///      (curator-adverse). The tier is deliberately NOT recomputed, so that 1-wei floor cannot demote a curator
+    ///      sitting exactly on a threshold either. While FROZEN only reputation (bMax, cap) changes.
     function credit(BudgetState memory s, BudgetParams memory p, uint256 gainWad, uint256 gainValue) internal pure {
         s.cumAlphaWad += gainWad;
         s.cumAlphaValue += gainValue;
         uint256 newBMax = bMaxFor(s.cumAlphaWad, p);
-        if (s.tier != Tier.FROZEN) {
-            s.budget += newBMax - s.bMax; // bMax is non-decreasing here because cumAlphaWad only grew
-            s.bMax = newBMax;
-            s.tier = tierFor(s.budget, s.bMax, p);
-        } else {
-            s.bMax = newBMax;
-        }
+        if (s.tier != Tier.FROZEN) s.budget = FullMath.mulDiv(s.budget, newBMax, s.bMax);
+        s.bMax = newBMax;
     }
 
     /// @notice Guardian restore: autonomy is re-earned, so land at restoreWad of bMax (RESTRICTED), not FULL.
