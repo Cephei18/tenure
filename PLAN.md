@@ -86,7 +86,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   below the FULL threshold over 500 blocks; differential tests updated; Python model updated first.
 
 ## M4 — The demo (this is what wins — make it undeniable)
-- [ ] **M4.1 Scenario actors.** Solidity test actors: `HonestCurator` (tracks fair price), `PoisonedCurator` (after a
+- [x] **M4.1 Scenario actors.** Solidity test actors: `HonestCurator` (tracks fair price), `PoisonedCurator` (after a
   "poison" event, places ranges skewed off fair price within static caps), `Attacker` (trades against mispriced
   liquidity, arbitrage profit), `Market` (moves fair price along a seeded path).
 - [ ] **M4.2 Headline scenario test.** Same seeded market, three runs: (A) honest curator + Tenure: builds budget,

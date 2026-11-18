@@ -187,3 +187,19 @@ Decisions made (on the branch): fee estimates are exact when the range's ticks a
 inside <= global growth; otherwise curator-adverse fallback (new range -> 0, counterfactual -> L * global delta).
 H_before/H_after and NAV include uncollected fees on the vault position (fixes leak masking by collected fees).
 Notes for human: please choose (a)/(b)/(c) in BLOCKERS.md. I recommend (a).
+
+## 2026-11-18T18:05Z — M4.1 Scenario actors — DONE
+What: test/scenario/ScenarioActors.sol: Market (seeded random walk of the FAIR tick + noise trade + arbitrage
+of spot back to fair), HonestCurator (re-centers on fair when drift > threshold, refuses to act when spot is off
+fair), PoisonedCurator (honest until poison(); then parks the range away from the price when spot == fair and
+re-centers on the manipulated spot otherwise - every action inside the static mandate), Attacker (push spot off
+fair, arbitrage back; profit measured at the fair price). All curator actions go through the real CuratedVault.
+Files: test/scenario/ScenarioActors.sol, test/scenario/ScenarioActors.t.sol, test/utils/VaultFixture.sol
+Tests: 5 added / 153 passing. `FOUNDRY_PROFILE=deploy forge build` OK.
+Decisions made:
+- A poisoned curator that only "follows spot" gives the attacker nothing: the push trades through the vault's
+  existing range and loses what the arb-back gains. The realistic exploit needs asymmetry, so the poisoned policy
+  alternates "park away" (lets the attacker push cheaply) and "follow spot" (gets arbitraged). One round: attacker
+  +422 tokens, vault -524 (pool with 2e23 full-range third-party liquidity; VaultFixture depth is now overridable).
+- Honest curator stays FULL over 200 blocks of a +-30 tick/step walk WITHOUT fees in alpha (M3.3 blocked).
+Notes for human: none

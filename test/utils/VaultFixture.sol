@@ -33,13 +33,19 @@ abstract contract VaultFixture is TenureTestBase {
         s.budget.refillRate = uint256(2e15) / 7200;
     }
 
+    /// @dev Full-range third-party liquidity. Scenarios override it with a shallower pool so the vault's
+    ///      concentrated liquidity matters (and an attack against it can pay).
+    function _thirdPartyLiquidity() internal pure virtual returns (uint128) {
+        return 1e27;
+    }
+
     function _setUpVault() internal {
         _deployTenureBase();
         cv = new CuratedVault(poolManager, hook, key, address(this), CURATOR, MAX_DEPOSIT_DEV, "Tenure Vault", "tnV");
         hook.registerPool(key, address(cv), oracle, _vaultSettings());
         _fund(address(swapper), 1e29);
         _fund(address(this), 1_000_000_000 ether);
-        _deepLiquidity(1e27);
+        _deepLiquidity(_thirdPartyLiquidity());
         address[3] memory users = [ALICE, BOB, EVE];
         for (uint256 i; i < 3; ++i) {
             _fund(users[i], 1_000_000 ether);
