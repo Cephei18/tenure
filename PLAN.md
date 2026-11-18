@@ -72,6 +72,10 @@ as pure libraries with heavy tests, before any vault plumbing.
   every tier; deposit cap enforced and grows with reputation.
 - [ ] **M3.2 rebalance(params).** Curator-only. begin -> unlock(remove, add) -> end. Settles deltas correctly.
   _Accept:_ end-to-end test: deposit, rebalance, swap, settle, withdraw; balances reconcile to the wei.
+- [ ] **M3.3 Fees in alpha.** Include LP fees earned by the new position (fee growth inside the range) in H_new,
+  and fees the old position would have earned in H_cf where computable; otherwise document the approximation.
+  _Accept:_ in a seeded honest-curator scenario with normal swap flow, the honest curator's budget never drops
+  below the FULL threshold over 500 blocks; differential tests updated; Python model updated first.
 
 ## M4 — The demo (this is what wins — make it undeniable)
 - [ ] **M4.1 Scenario actors.** Solidity test actors: `HonestCurator` (tracks fair price), `PoisonedCurator` (after a
@@ -82,6 +86,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   budget drains, tiers step down, frozen, loss bounded. Print a clear comparison table; write
   `docs/results/headline.csv` (per-block NAV, budget, tier for each run).
   _Accept:_ test passes; loss(C) << loss(B); numbers in docs/results.
+  Run A (honest) must stay in FULL for the entire run.
 - [ ] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`: NAV over
   time for B vs C with tier changes marked; budget over time.
   _Accept:_ PNGs generated from the CSVs.
@@ -96,16 +101,20 @@ as pure libraries with heavy tests, before any vault plumbing.
   curator, window gaming, curator bypass attempts (direct PoolManager calls), reentrancy via hooks.
   Document each in docs/THREAT_MODEL.md with result.
 - [ ] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
+- [ ] **M5.4 Settlement gas.** Cap afterSwap auto-settle at 1 record per swap (config param),
+  keep settle() permissionless, add settleMany(ids) for keepers. _Accept:_ gas snapshot shows afterSwap
+  overhead with 0 and 1 due records; README explains the cost model.
 
 ## M6 — Submission materials
 - [ ] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy
   params; AI curator = off-chain signals/ML; reputation-weighted AUM = budget-driven deposit cap), math summary,
   architecture mermaid diagram, results charts, threat model summary, limitations, how to run.
+  Document FOUNDRY_PROFILE=deploy for anvil/testnet deploys and the contract-size reason.
 - [ ] **M6.2 docs/MATH.md.** Full derivations with a worked numeric example matching a test.
 - [ ] **M6.3 Pitch outline.** docs/PITCH.md: 3-minute demo script, slide outline, likely judge questions + answers.
 
 ## Stretch (only after everything above is [x])
-- [ ] **S1** Include LP fees earned in alpha via fee growth inside the range.
+- S1 moved to M3.3 (fees in alpha).
 - [ ] **S2** Multiple markout windows (short + long) to resist window gaming.
 - [ ] **S3** Optional LLM-driven curator in sim/ (needs API key -> leave runnable but default to rule-based).
 - [ ] **S4** Minimal dashboard (single HTML file reading the CSVs).
