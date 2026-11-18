@@ -273,3 +273,14 @@ Decisions made:
 - VaultFixture._vaultSettings is now `view` (run B switches params via a storage flag).
 Notes for human: loss(C) vs loss(B) is 3.3x at 600 blocks and widens linearly with run length (C is frozen).
 "Loss vs A" counts A's fee income, so C's figure includes ~430 blocks of forgone fees, not only attack damage.
+
+## Handoff — 2026-11-18T21:15Z
+Where I stopped: after M4.2 (commit 02166b6). main is green: 162 tests, sim 47 passed, deploy build OK.
+Done since the last handoff: M3.3 (merged, exit-snapshot fix, gas bound per human decision), M4.2.
+Next: M4.3 charts. docs/results/headline.csv columns: block, navA, ratioA, tierA, navB, ratioB, tierB, navC,
+ratioC, tierC (NAV in token1 wei at the fair price; ratio = budget/bMax in WAD; tier 0 FULL / 1 RESTRICTED /
+2 FROZEN). Plot NAV for A/B/C (or NAV minus A to remove the market walk - clearer), budget ratio for C with the
+50% / 20% thresholds and tier changes marked (C: RESTRICTED at 160, FROZEN at 170), poison at block 100.
+docs/results/slow_bleed.csv exists from M1.6.
+Watch out: TenureHook is 24,460 B under the deploy profile (limit 24,576). Any hook change (M5.4!) must re-check
+`FOUNDRY_PROFILE=deploy forge build --sizes`; options are in foundry.toml.
