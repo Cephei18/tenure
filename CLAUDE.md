@@ -85,4 +85,8 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - TenureHook exceeds 24KB without via-IR: deploy with FOUNDRY_PROFILE=deploy (via_ir). Tests use deployCodeTo (no size limit).
 - Tests: use vm.getBlockNumber()/vm.getBlockTimestamp(), never block.number - via-IR caches it across vm.roll.
 - Windows: keep LF line endings (.gitattributes) or `forge fmt --check` fails on every file.
+- ACCEPTED: Guardian restore sets budget to 35% of bMax (lands in RESTRICTED; autonomy is re-earned).
+- ACCEPTED: Positive alpha grows bMax and deposit cap but never refills budget; losses reduce cumulative positive alpha.
+- ACCEPTED: "Fraction of NAV moved" = value swapped between tokens; range moves without swaps are bounded by the distance-from-fair-price rule instead.
+- ACCEPTED: Hook exceeds 24KB in default profile; deploy with FOUNDRY_PROFILE=deploy.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->

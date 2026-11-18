@@ -52,7 +52,7 @@ alpha    = NAV(H_new(T), S*_T) - NAV(H_cf(T), S*_T)
 ```
 Negative alpha = the decision destroyed value vs doing nothing. Being picked off by an attacker shows up because the
 new range sits where spot diverges from fair. Known limitation (document it, don't hide it): S_T itself is affected by
-the curator's own liquidity (second-order), fees are excluded until stretch S1.
+the curator's own liquidity (second-order), fees are excluded until M3.3 (fees in alpha).
 
 ## 5. Loss charged to the budget
 ```
@@ -71,18 +71,35 @@ ratio  = budget * 1e18 / bMax
 tier   = ratio >= 0.50e18 ? FULL : ratio >= 0.20e18 ? RESTRICTED : FROZEN
 ```
 - FROZEN is sticky: refill alone never leaves FROZEN. Only guardian `restore()` after a timelock, which sets
-  `budget = bMax / 2` (RESTRICTED) — autonomy is re-earned, not restored to full.
+  `budget = bMax * 0.35` (`restoreWad = 0.35e18`, lands in RESTRICTED) — autonomy is re-earned, not restored to full.
+  ACCEPTED decision; config must keep `restrictedThreshold <= restoreWad < fullThreshold`.
 - RESTRICTED tightens the mandate: max NAV fraction moved / 2, min range width * 2, cooldown * 2.
+- "Fraction of NAV moved" (`maxMoveWad`) = value swapped between tokens in the rebalance, as WAD of NAV_before
+  (ACCEPTED). A range move with no swap moves 0 by this measure; it is bounded instead by the max
+  distance-of-range-center-from-fair-price rule.
 - Suggested defaults (make them constructor/config params): `bMax0 = 0.02e18` (2% of NAV), `r` such that empty->full
   takes ~1 day of blocks, `W = 50` blocks, thresholds 50% / 20%.
 
 ## 7. Reputation (pool-native)
+State: `cumAlphaWad` (net positive alpha, WAD of NAV) and `cumAlphaValue` (net positive alpha, token1 units).
 ```
-on settle with alpha > 0:  cumPositiveAlpha += alpha (value, token1 units)
-bMax        = min(bMaxCap, bMax0 + k * cumPositiveAlpha / NAV_ref)   (WAD)
-depositCap  = min(capMax, cap0 + m * cumPositiveAlpha)
+on settle with alpha > 0 (credit):
+  cumAlphaWad += alphaWad; cumAlphaValue += alpha
+  bMax'  = min(bMaxCap, bMax0 + k * cumAlphaWad)          (WAD)
+  budget += bMax' - bMax   (unless FROZEN)                // deficit bMax - budget unchanged: NO refill
+on any loss (charge, L_imm or negative alpha):
+  cumAlphaWad   = sat_sub(cumAlphaWad, lossWad)            // losses reduce net positive alpha first
+  cumAlphaValue = sat_sub(cumAlphaValue, lossValue)
+  bMax'  = min(bMaxCap, bMax0 + k * cumAlphaWad)
+  budget = sat_sub(min(budget, bMax'), lossWad)
+depositCap = min(capMax, cap0 + m * cumAlphaValue)
 ```
-Losses never increase reputation; consider also decaying cumPositiveAlpha on losses (document choice).
+ACCEPTED decisions:
+- Positive alpha grows `bMax` and the deposit cap but NEVER refills spent budget. The budget only rises by the
+  new headroom so the deficit `bMax - budget` is preserved (tier never drops just because bMax grew); while
+  FROZEN, credit changes reputation only, not budget.
+- Losses reduce cumulative positive alpha (saturating at 0), so reputation is net of losses and bMax / deposit
+  cap can shrink back toward their base values.
 
 ## Rounding — always against the curator
 - Holdings used for NAV_after and H_new: round DOWN. NAV_before and H_cf: round UP where the API allows.
