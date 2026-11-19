@@ -111,6 +111,22 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [ ] **M4.4 Local demo script.** `script/Demo.s.sol` runnable on anvil that deploys everything and replays scenario C
   with readable logs. `docs/DEMO.md` with exact commands.
   _Accept:_ runs end-to-end on a fresh anvil.
+- [ ] **M4.5a Reactive settlement.** Install Reactive-Network/reactive-lib and reactive-test-lib (pin exact
+  commits). Build TenureSettlerRC (Reactive side): subscribes to RebalanceScored on the origin chain and to cron;
+  tracks pending records; when due, emits a Callback that calls TenureReactiveReceiver.settleMany(ids) on the
+  destination. Receiver validates callback proxy + RVM ID. Per-pool config: autoSettlePerSwap = 0 when Reactive
+  settles. Keep new hook bytecode minimal (receiver is a separate contract).
+  _Accept:_ reactive-test-lib tests: scored rebalance -> callback fires only after the window -> record settled;
+  unauthorized callback reverts; afterSwap gas with autoSettle=0 shows no settlement overhead.
+- [ ] **M4.5b Cross-chain freeze propagation.** TenureFreezeRC subscribes to tier-change events on chains A and B;
+  on FROZEN for curatorId on one chain, emits Callback to the freeze receiver on the other chain.
+  SAFETY INVARIANT: the receiver can only freeze/restrict, never unfreeze, restore, or raise budget; restore stays
+  with the local guardian. _Accept:_ tests prove the invariant (every non-freeze action via the receiver reverts),
+  freeze propagates A->B and B->A, duplicate/replayed callbacks are harmless, docs/THREAT_MODEL.md covers the
+  relay trust model.
+- [H] Ask Reactive dev chat: best way to time a 50-block origin-chain window; confirm current callback proxy
+  addresses; get Lasna testnet funds.
+- [H] Testnet deploy: Unichain Sepolia + Base Sepolia + Lasna, burner keys only.
 
 ## M5 — Hardening (judges probe these)
 - [ ] **M5.1 Invariant tests.** Handler-based invariants: vault solvency (shares * NAV <= holdings), budget bounds,
