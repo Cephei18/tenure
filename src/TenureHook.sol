@@ -34,6 +34,7 @@ struct PoolSettings {
     uint32 maxOracleAge; // seconds
     uint32 window; // markout window W, blocks
     uint24 maxSettleDev; // settlement requires |spot tick - fair tick| <= this (anti window-gaming)
+    uint8 autoSettlePerSwap; // due records afterSwap settles per swap: 0 = off (keepers settle), 1 = on (M5.4)
     Mandate mandate;
     BudgetParams budget;
 }
@@ -75,6 +76,7 @@ contract TenureHook is BaseHook {
     error Tenure__BadSalt();
     error Tenure__OrphanedLiquidity();
     error Tenure__InvalidMandate();
+    error Tenure__InvalidSettings();
     error Tenure__Frozen();
     error Tenure__NotFrozen();
     error Tenure__Cooldown(uint256 readyAt);
@@ -102,8 +104,9 @@ contract TenureHook is BaseHook {
     bytes32 internal constant SESSION_SLOT = 0x4cf0626aa298570f9f11853ed284e3a77616d44640b681cd7282c06e4d6758b9;
     bytes32 internal constant NEWRANGE_SLOT = 0x91a39552ac870bd84550b1ff670fbd9576e38088668f0d566a8e0988b6a134b6;
 
-    /// @notice Max records settled opportunistically per swap, and max records inspected (bounded afterSwap gas).
-    uint256 public constant MAX_AUTO_SETTLE = 3;
+    /// @notice Max per-pool `autoSettlePerSwap` (M5.4: one fee-aware settlement per swap at most), and max records
+    ///         inspected per swap (skips records a keeper already settled; bounded afterSwap gas).
+    uint256 public constant MAX_AUTO_SETTLE = 1;
     uint256 public constant MAX_AUTO_SCAN = 6;
 
     /// @notice Delay before a proposed mandate takes effect: depositors can exit first.
@@ -284,6 +287,7 @@ contract TenureHook is BaseHook {
         PoolId id = key.toId();
         if (configs[id].vault != address(0)) revert Tenure__AlreadyRegistered();
         _validateMandate(s.mandate);
+        if (s.autoSettlePerSwap > MAX_AUTO_SETTLE) revert Tenure__InvalidSettings();
         RiskBudget.validate(s.budget);
         configs[id] = PoolConfig(vault, oracle, key.currency0, key.currency1);
         _settings[id] = s;
@@ -422,12 +426,30 @@ contract TenureHook is BaseHook {
         if (r.settled) revert Tenure__AlreadySettled();
         uint256 due = uint256(r.blockNumber) + _settings[id].window;
         if (block.number < due) revert Tenure__TooEarly(due);
-        PoolSettings storage s = _settings[id];
-        uint160 fair = ReferencePriceLib.readFresh(configs[id].oracle, id, s.maxOracleAge);
-        (uint160 spot,,,) = poolManager.getSlot0(id);
-        uint256 dev = TenureScorer.tickDistance(spot, fair);
-        if (dev > s.maxSettleDev) revert Tenure__SpotOffFair(dev, s.maxSettleDev);
+        (uint160 spot, uint160 fair) = _settlementPrices(id);
         alpha = _settle(id, recordId, spot, fair);
+        _advancePointer(id);
+    }
+
+    /// @notice Keeper entry point (M5.4): settle every listed record that is due and not yet settled; records that
+    ///         are unknown, already settled or not yet due are skipped (so a keeper's batch never fails on a race).
+    ///         Anyone may call. The oracle and spot-vs-fair checks run once and revert as in `settle`.
+    /// @dev Gas is paid by the caller and bounded by `ids.length`. Pools with `autoSettlePerSwap = 0` rely on this
+    ///      (or `settle`), so swappers pay nothing for markouts.
+    /// @return settled Number of records settled.
+    function settleMany(PoolId id, uint256[] calldata ids) external returns (uint256 settled) {
+        if (configs[id].vault == address(0)) revert Tenure__NotRegistered();
+        (uint160 spot, uint160 fair) = _settlementPrices(id);
+        uint256 window = _settings[id].window;
+        uint256 len = _records[id].length;
+        for (uint256 i; i < ids.length; ++i) {
+            uint256 rid = ids[i];
+            if (rid >= len) continue;
+            RebalanceRecord storage r = _records[id][rid];
+            if (r.settled || block.number < uint256(r.blockNumber) + window) continue;
+            _settle(id, rid, spot, fair);
+            ++settled;
+        }
         _advancePointer(id);
     }
 
@@ -521,9 +543,9 @@ contract TenureHook is BaseHook {
         return this.beforeRemoveLiquidity.selector;
     }
 
-    /// @dev Keeper-free markouts: piggyback on swap flow and settle up to MAX_AUTO_SETTLE due records. Never
-    ///      reverts the swap: skips silently if the oracle is stale/broken, spot is off fair, or a vault session is
-    ///      open. Bounded by MAX_AUTO_SCAN iterations.
+    /// @dev Keeper-free markouts: piggyback on swap flow and settle up to `autoSettlePerSwap` (<= 1) due records.
+    ///      Never reverts the swap: skips silently if auto-settle is off, the oracle is stale/broken, spot is off
+    ///      fair, or a vault session is open. Bounded by MAX_AUTO_SCAN iterations.
     function _afterSwap(address, PoolKey calldata key, SwapParams calldata, BalanceDelta, bytes calldata)
         internal
         override
@@ -540,6 +562,8 @@ contract TenureHook is BaseHook {
         uint256 len = _records[id].length;
         if (ptr >= len) return;
         PoolSettings storage s = _settings[id];
+        uint256 maxSettle = s.autoSettlePerSwap;
+        if (maxSettle == 0) return; // keepers settle this pool: swappers pay no markout gas
         if (block.number < uint256(_records[id][ptr].blockNumber) + s.window) return;
 
         uint160 fair;
@@ -554,9 +578,12 @@ contract TenureHook is BaseHook {
         if (TenureScorer.tickDistance(spot, fair) > s.maxSettleDev) return;
 
         uint256 settled;
-        for (uint256 scanned; scanned < MAX_AUTO_SCAN && ptr < len && settled < MAX_AUTO_SETTLE; ++scanned) {
+        // Keep scanning past records a keeper already settled (cheap) even after the cap is reached, so the
+        // pointer does not stall behind them; stop at the first unsettled record once the cap is used.
+        for (uint256 scanned; scanned < MAX_AUTO_SCAN && ptr < len; ++scanned) {
             RebalanceRecord storage r = _records[id][ptr];
             if (!r.settled) {
+                if (settled == maxSettle) break;
                 if (block.number < uint256(r.blockNumber) + s.window) break; // records are chronological
                 _settle(id, ptr, spot, fair);
                 ++settled;
@@ -566,12 +593,21 @@ contract TenureHook is BaseHook {
         settlePointer[id] = ptr;
     }
 
+    /// @dev Fresh fair price and pool spot for an explicit settlement; reverts if stale or if spot is off fair
+    ///      (anti window-gaming: a manipulated spot must not be able to choose the markout).
+    function _settlementPrices(PoolId id) internal view returns (uint160 spot, uint160 fair) {
+        PoolSettings storage s = _settings[id];
+        fair = ReferencePriceLib.readFresh(configs[id].oracle, id, s.maxOracleAge);
+        (spot,,,) = poolManager.getSlot0(id);
+        uint256 dev = TenureScorer.tickDistance(spot, fair);
+        if (dev > s.maxSettleDev) revert Tenure__SpotOffFair(dev, s.maxSettleDev);
+    }
+
     function _settle(PoolId id, uint256 recordId, uint160 spot, uint160 fair) internal returns (int256 alpha) {
         RebalanceRecord storage r = _records[id][recordId];
         r.settled = true;
         alpha = _alphaWithFees(id, recordId, r, spot, fair);
-        BudgetState memory b = _refilled(id);
-        Tier before = b.tier;
+        (BudgetState memory b, Tier before) = _refilledMem(id);
         uint256 lossW;
         uint256 gainW;
         (b, lossW, gainW) = TenureScorer.applyMarkout(b, _settings[id].budget, alpha, r.navBefore);
@@ -747,8 +783,7 @@ contract TenureHook is BaseHook {
     {
         (sc.leak, sc.navBefore, sc.movedW) =
             TenureScorer.scoreRebalance(snap.oldRange, snap.idle, snap.spot, newR, idleNew, spotAfter, snap.fair);
-        BudgetState memory b = _refilled(id);
-        Tier before = b.tier;
+        (BudgetState memory b, Tier before) = _refilledMem(id);
         _checkMandate(id, b.tier, snap.fair, newR, sc.movedW);
         if (sc.navBefore != 0) {
             (b, sc.lossW) = TenureScorer.chargeLeak(b, _settings[id].budget, sc.leak, sc.navBefore);
@@ -805,10 +840,19 @@ contract TenureHook is BaseHook {
     }
 
     function _refilled(PoolId id) internal returns (BudgetState memory b) {
+        Tier tierNow;
+        (b, tierNow) = _refilledMem(id);
+        _budget[id] = b;
+    }
+
+    /// @dev Refill in memory only (the caller stores once, M5.4 gas). Emits TierChanged if the refill itself moved
+    ///      the tier, exactly as a stored refill would. Returns the post-refill tier for the caller's own event.
+    function _refilledMem(PoolId id) internal returns (BudgetState memory b, Tier tierNow) {
         b = _budget[id];
         Tier before = b.tier;
         RiskBudget.refill(b, _settings[id].budget, block.number);
-        _storeBudget(id, b, before);
+        tierNow = b.tier;
+        if (tierNow != before) emit TierChanged(id, before, tierNow);
     }
 
     function _storeBudget(PoolId id, BudgetState memory b, Tier before) internal {

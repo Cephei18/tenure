@@ -94,8 +94,9 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - ACCEPTED (M3.3): afterSwap one-settlement gas bound raised 150k -> 213,240 (human decision); fee reads are cold. Reduce in M5.4.
 - Gas snapshots are per profile: snapshots/TenureHook.<FOUNDRY_PROFILE>.json (default / deploy).
 - Fees: a range abandoned before settlement has cleared ticks; the hook snapshots its fee growth at exit (_markExit).
-- M4.2c: heavy pure math lives in EXTERNAL library TenureScorer (linked). Hook via-IR 21,907 B (2,669 B headroom, guarded by
-  test_hookSize_headroomUnderDeployProfile). deployCodeTo/vm.getCode and forge script auto-link it; no manual link step.
+- M4.2c: heavy pure math lives in EXTERNAL library TenureScorer (linked). deployCodeTo/vm.getCode and forge script auto-link it.
+  After M5.4 the hook is 22,528 B via-IR: only 48 B above the 2,000 B guard (test_hookSize_headroomUnderDeployProfile).
+  Before adding ANY hook code, move more pure math (e.g. RiskBudget.refill) into TenureScorer first.
 - vm.revertToState also reverts the TEST CONTRACT's storage: set loop params (seed, flags) AFTER reverting.
 - Windows: `python3` is not on PATH (Store alias); run `python -m pytest sim -q`.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->

@@ -179,15 +179,18 @@ contract TenureHookScoringTest is HookFixture {
         assertFalse(hook.recordOf(poolId, 0).settled);
     }
 
+    /// M5.4: at most autoSettlePerSwap (= MAX_AUTO_SETTLE = 1) fee-aware settlement per swap; the rest wait for
+    /// later swaps (or a keeper). Was 3 per swap before M5.4 (plan change, not a relaxation: the bound is tighter).
     function test_afterSwap_boundedPerSwap() public {
+        assertEq(hook.MAX_AUTO_SETTLE(), 1);
         _makeRecords(5);
         vm.roll(vm.getBlockNumber() + WINDOW);
-        _smallSwap();
-        assertEq(hook.settlePointer(poolId), 3, "settles at most MAX_AUTO_SETTLE per swap");
-        assertFalse(hook.recordOf(poolId, 3).settled);
-        _smallSwap();
-        assertEq(hook.settlePointer(poolId), 5);
-        assertTrue(hook.recordOf(poolId, 4).settled);
+        for (uint256 k = 1; k <= 5; ++k) {
+            _smallSwap();
+            assertEq(hook.settlePointer(poolId), k, "exactly one settlement per swap");
+            assertTrue(hook.recordOf(poolId, k - 1).settled);
+            if (k < 5) assertFalse(hook.recordOf(poolId, k).settled, "the next record waits for the next swap");
+        }
     }
 
     function test_afterSwap_skipsManuallySettled() public {
@@ -219,7 +222,8 @@ contract TenureHookScoringTest is HookFixture {
         // Raised from 150k by human decision (M3.3): fee measurement requires extra cold reads of pool state.
         // Reduction tracked in M5.4. Bound = max(default 193,854; deploy/via-IR 192,771) + 10% = 213,240.
         assertLt(g1 - g0, 213_240, "one fee-aware settlement is bounded");
-        assertLt(g3 - g0, 400_000, "bounded: at most MAX_AUTO_SETTLE settlements per swap");
+        // M5.4: auto-settle is capped at ONE record per swap, so 3 due records cost no more than 1 (was < 400k).
+        assertLt(g3 - g0, 213_240, "bounded: at most one settlement per swap");
     }
 
     // ---------------------------------------------------------------- helpers

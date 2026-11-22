@@ -423,3 +423,33 @@ Decisions made:
 - No feed-vs-TWAP deviation guard yet (listed as residual risk in THREAT_MODEL section 3).
 Notes for human: for a testnet deploy, use real Chainlink feed addresses for the chain (e.g. ETH/USD and USDC/USD
 on Unichain Sepolia / Base Sepolia, if available) and pass token decimals explicitly to setFeeds.
+
+## 2026-11-22T17:18Z — M5.4 Settlement gas — DONE
+What: per-pool PoolSettings.autoSettlePerSwap (0 = off: keepers settle, swappers pay nothing; 1 = on), validated
+at registerPool (> 1 reverts Tenure__InvalidSettings). afterSwap auto-settle capped at ONE record per swap
+(MAX_AUTO_SETTLE 3 -> 1); the scan still skips past keeper-settled records so the pointer never stalls.
+New permissionless settleMany(id, ids): skips unknown / settled / not-due ids, reverts only on a stale oracle or
+spot off fair (shared _settlementPrices with settle). Gas: BudgetState is now written once per settle/score
+(_refilledMem keeps the refill's TierChanged event). README.md (new, stub until M6.1) explains the cost model.
+Gas (afterSwap overhead vs nothing due):  default / deploy
+  1 due, auto on:   205,734 -> 204,822   /  202,553 -> 201,514   (bound 213,240 unchanged)
+  3 due, auto on:   333,434 -> 139,155   /  322,690 -> 134,747   (now settles 1; bound tightened 400k -> 213,240)
+  3 due, auto OFF:  -2,798 (no settlement) / -2,815
+Files: src/TenureHook.sol, test/TenureHookKeepers.t.sol (new), test/TenureHookScoring.t.sol,
+test/utils/TenureTestBase.sol, script/Demo.s.sol, snapshots/TenureHook.{default,deploy}.json, README.md (new),
+CLAUDE.md, PLAN.md
+Tests: 8 added / 199 passing in BOTH profiles. Scenario CSVs (headline, sweep, slow_bleed) byte-identical, so
+RESULTS.md, charts and the demo numbers stand. forge fmt OK.
+Decisions made:
+- test_afterSwap_boundedPerSwap rewritten for the plan's new cap (exactly one settlement per swap, checked on each
+  of 5 swaps); this tightens the old "3 per swap" bound, it does not relax it. The 3-due gas bound was tightened
+  from 400,000 to the one-settlement bound 213,240.
+- The first cap-1 version stalled the settle pointer behind keeper-settled records (caught by
+  test_afterSwap_skipsManuallySettled); fixed in the hook, test unchanged.
+- Gas reduction is small (~1k): the cost is cold fee-growth reads that fee-aware markouts need (BLOCKERS M3.3
+  analysis still holds). Struct packing was not done: it would touch every record/budget read for ~15-20k
+  (estimated in M3.3) and the hook has no size headroom left for it.
+- Size: settleMany pushed the hook to 22,728 B (1,848 B headroom, guard FAILED under deploy). Deduplicating the
+  settle/settleMany price checks brought it to 22,528 B (2,048 B headroom, guard passes by 48 B).
+Notes for human: the hook is at the size limit of our own 2,000 B guard. M4.5a must keep the receiver outside
+the hook (planned) and move RiskBudget.refill (or similar) into TenureScorer before adding any hook code.

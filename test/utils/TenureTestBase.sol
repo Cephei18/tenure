@@ -76,6 +76,7 @@ abstract contract TenureTestBase is BaseTest {
             maxOracleAge: MAX_ORACLE_AGE,
             window: WINDOW,
             maxSettleDev: 100,
+            autoSettlePerSwap: 1,
             mandate: _mandate(),
             budget: TenureDefaults.budgetParams()
         });

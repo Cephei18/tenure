@@ -119,7 +119,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   tokens into a fair sqrtPriceX96; staleness from updatedAt; revert on non-positive answers or incomplete
   rounds. Lives outside the hook. _Accept:_ unit + fuzz tests against a mock aggregator, including decimals
   combinations (6/8/18), stale and negative answers; differential check vs sim/model.py conversion.
-- [ ] **M5.4 Settlement gas.** (Moved up: M4.5a depends on settleMany and autoSettlePerSwap = 0.)
+- [x] **M5.4 Settlement gas.** (Moved up: M4.5a depends on settleMany and autoSettlePerSwap = 0.)
   Cap afterSwap auto-settle at 1 record per swap (config param, per pool), and allow auto-settle count = 0 per pool (opt-out: swappers pay nothing extra; settlement is then done by
   keepers). Keep settle() permissionless, add settleMany(ids) for keepers. Try to reduce the fee-aware
   settlement cost raised in M3.3 (e.g. pack RebalanceRecord / BudgetState). _Accept:_ gas snapshot shows

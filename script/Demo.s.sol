@@ -106,6 +106,7 @@ contract Demo is TenureHookDeployer {
             maxOracleAge: 1 hours,
             window: 50,
             maxSettleDev: 100,
+            autoSettlePerSwap: 1,
             mandate: Mandate({minWidth: 120, maxWidth: 12_000, maxCenterDist: 3000, maxMoveWad: 0.2e18, cooldown: 10}),
             budget: TenureDefaults.budgetParams()
         });
