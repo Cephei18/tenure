@@ -107,7 +107,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   in the hook; linking must work in tests and scripts. _Accept:_ size report shows >= 2,000 bytes headroom; full suite and
   gas assertions still pass (re-measure afterSwap gas under BOTH profiles against the 213,240 bound; any gas
   increase is recorded under Decisions made).
-- [ ] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`,
+- [x] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`,
   `sweep.png`. Headline: runs B and C on the same axes with tier changes marked, readable at a glance; budget over
   time. Sweep: per-seed B vs C loss, sorted.
   _Accept:_ PNGs generated from the CSVs.

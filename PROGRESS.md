@@ -346,3 +346,22 @@ Decisions made:
 Notes for human: deploy the hook with FOUNDRY_PROFILE=deploy; forge script deploys TenureScorer automatically
 (one extra tx). To reuse one library across deployments pass
 `--libraries src/libraries/TenureScorer.sol:TenureScorer:<addr>`.
+
+## 2026-11-22T14:06Z — M4.3 Charts — DONE
+What: sim/plot_results.py renders three PNGs from the committed CSVs into docs/results/:
+- headline.png: runs B and C on the same axes as "NAV minus honest run A" (removes the shared market walk), with
+  poison (block 100), C RESTRICTED (160) and C FROZEN -> safe mode (170) marked; second panel: budget/bMax for A
+  and C with the 50% / 20% tier thresholds. End values labeled directly (B -4,197, C -1,261).
+- sweep.png: per-seed B vs C loss as a dumbbell chart sorted by B loss, with B median (6,450) and C worst (4,520)
+  marked - the M4.2b acceptance claim is visible at a glance.
+- slow_bleed.png: cumulative loss, static cap vs Tenure, RESTRICTED at action 22, FROZEN at 57.
+docs/RESULTS.md embeds all three; sim/README.md documents the command.
+Files: sim/plot_results.py (new), sim/test_plot_results.py (new), docs/results/{headline,sweep,slow_bleed}.png,
+docs/RESULTS.md, sim/README.md, PLAN.md
+Tests: 2 added / sim 49 passed (python -m pytest sim -q). No Solidity change (forge suite unchanged: 175).
+Decisions made:
+- Fixed categorical colors by entity (A blue, B orange, C aqua) from the dataviz default palette; one y-axis per
+  panel (no dual axes); tier marks are read from the CSV, not hard-coded (a test asserts poison < RESTRICTED <=
+  FROZEN and that A has no tier marks).
+- Labels floor to whole tokens so they match RESULTS.md (B median 6,450.58 -> 6,450).
+Notes for human: after any scenario change, rerun forge test (rewrites the CSVs) then python sim/plot_results.py.

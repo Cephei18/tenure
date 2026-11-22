@@ -6,10 +6,13 @@
 | `test_model.py` | Hand-checked examples + randomized invariants. |
 | `gen_vectors.py` | Writes `test/vectors/*.json` from the integer layer (fixed seed `0x7E2A`). |
 | `test_vectors_fresh.py` | Fails if committed vectors are stale vs the model. |
+| `plot_results.py` | Charts from `docs/results/*.csv` -> `headline.png`, `sweep.png`, `slow_bleed.png` (matplotlib; floats OK, plotting only). |
+| `test_plot_results.py` | Smoke test: the charts regenerate from the committed CSVs. |
 
 ```
 python -m pytest sim -q          # model tests
 python sim/gen_vectors.py        # regenerate vectors after ANY model change, then commit them
+python sim/plot_results.py       # regenerate docs/results/*.png after forge test rewrites the CSVs
 forge test --match-path "test/diff/*"   # Solidity differential tests consume the vectors
 ```
 

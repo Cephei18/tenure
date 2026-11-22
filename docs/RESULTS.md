@@ -2,7 +2,9 @@
 
 All numbers come from Foundry tests against a real v4 PoolManager, the real `TenureHook` and the real
 `CuratedVault`. Tokens are whole token units (18 decimals) valued at the fair price. Raw data lives in
-`docs/results/`.
+`docs/results/`. Charts are regenerated from the CSVs by `python sim/plot_results.py`.
+
+![Headline: B vs C value lost, tier changes, budget](results/headline.png)
 
 ## Setup (shared by every run)
 
@@ -23,6 +25,8 @@ All numbers come from Foundry tests against a real v4 PoolManager, the real `Ten
 ## Seed sweep: 20 seeds (M4.2b)
 
 `test/scenario/Sweep.t.sol`; per-seed rows in `docs/results/sweep.csv`.
+
+![Per-seed loss, B vs C, sorted](results/sweep.png)
 
 | Metric (20 seeds) | Median | Worst / best |
 |---|---:|---:|
@@ -65,3 +69,10 @@ caps, while never restricting the honest curator.** Loss vs A should not be read
 `test/scenario/Headline.t.sol`; per-block NAV, budget ratio and tier in `docs/results/headline.csv`.
 A: FULL in all 600 blocks. B: 25 rounds, -4,197 vs A, attacker +1,563. C: RESTRICTED at block 160, FROZEN at
 170 after 3 rounds, -1,261 vs A, attacker +625.
+
+## Slow bleed (M1.6)
+
+`test/scenario/SlowBleed.t.sol`; `docs/results/slow_bleed.csv`. 200 small leaks, each inside the static
+per-action cap: the static cap allows all of them; Tenure's budget restricts at action 22 and freezes at 57.
+
+![Slow bleed: static cap vs Tenure budget](results/slow_bleed.png)
