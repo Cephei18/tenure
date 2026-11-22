@@ -453,3 +453,24 @@ Decisions made:
   settle/settleMany price checks brought it to 22,528 B (2,048 B headroom, guard passes by 48 B).
 Notes for human: the hook is at the size limit of our own 2,000 B guard. M4.5a must keep the receiver outside
 the hook (planned) and move RiskBudget.refill (or similar) into TenureScorer before adding any hook code.
+
+## Handoff — 2026-11-22T17:18Z
+Where I stopped: after M5.4 (commit c5da1d5). main is green in BOTH profiles: 199 tests; sim 53 passed;
+deploy build OK (TenureHook 22,528 B, TenureScorer 6,302 B, CuratedVault 16,395 B, ChainlinkReferencePrice 2,987 B).
+Not pushed (per instructions): origin/main is at 647affa; local main is 7 commits ahead.
+Done this session (plan reorder first, commit 504c3fc): M4.2c (linked TenureScorer), M4.3 (charts), M4.4 (anvil
+demo), M4.6 (Chainlink adapter), M5.4 (settlement gas, settleMany, README cost model stub).
+Next: M4.5a Reactive settlement, then M4.5b, M5.1, M5.2, M5.3, M6.x.
+For M4.5a:
+  - Needs network: forge install Reactive-Network/reactive-lib and reactive-test-lib at EXACT commits (record
+    them in foundry.lock + CLAUDE.md Learnings); read their sources under lib/ before calling anything.
+  - The receiver must be a SEPARATE contract calling hook.settleMany(id, ids) (already permissionless, skips
+    settled/not-due ids). The pool sets autoSettlePerSwap = 0 (test: TenureHookKeepers gas_afterSwap_autoSettleOff
+    already shows zero settlement overhead for swappers).
+  - SIZE: the hook has only 48 B above our 2,000 B guard. Do NOT add hook code; if anything must change in the
+    hook, first move RiskBudget.refill into TenureScorer (external) and re-measure both gas profiles.
+  - [H] items still open: Reactive callback proxy addresses + Lasna funds (needed only for testnet, not for tests).
+Watch out:
+  - Any test that wraps a call in vm.expectRevert must build its args first (bit me again in M4.6).
+  - FOUNDRY_PROFILE=deploy builds take 4-10 min after a default build (shared cache); run them in background.
+  - demo.sh uses a fixed 25M gas limit on purpose (gas estimation + curator try/catch silently reverted ticks).
