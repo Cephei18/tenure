@@ -10,7 +10,7 @@ Work through every item. If any fails, the task is not done.
 ## Build and tests
 - [ ] `forge build` has zero errors and no new warnings you introduced.
 - [ ] `forge test` FULL suite passes (not just the new tests). Paste the summary line into PROGRESS.md.
-- [ ] If sim/ changed: `python3 -m pytest sim -q` passes; vectors regenerated and committed if the model changed.
+- [ ] If sim/ changed: `python -m pytest sim -q` passes; vectors regenerated and committed if the model changed.
 - [ ] `forge fmt --check` passes (run `forge fmt` if not).
 
 ## Tests actually test something

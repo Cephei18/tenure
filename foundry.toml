@@ -24,4 +24,5 @@ seed = "0x7e2a"
 [profile.deploy]
 via_ir = true
 # TenureHook is 24,460 B here (EIP-170 limit 24,576 B). If it grows past the limit, lower optimizer_runs
-# (100 saves ~200 B) or move views out of the hook. Do not ship over the limit.
+# (measured: 200 -> 100 saves ~430 B, 100 -> 30 only ~70 B more) or move code out of the hook. Do not ship over
+# the limit.

@@ -22,7 +22,7 @@ The remaining work is the vault (M3), the headline demo (M4), hardening (M5) and
    regenerate vectors FIRST, then Solidity. Implement the task and its tests completely.
 
 5. Verify with BOTH profiles: `forge build`, `forge test`, and `FOUNDRY_PROFILE=deploy forge build`.
-   For sim changes: `python3 -m pytest sim -q`. Run the self-review checklist. Everything must pass.
+   For sim changes: `python -m pytest sim -q`. Run the self-review checklist. Everything must pass.
 
 6. If green: mark `[x]` in PLAN.md, append to PROGRESS.md:
    ## <ISO timestamp> — <task id> <name> — DONE

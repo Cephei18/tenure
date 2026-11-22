@@ -20,7 +20,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [x] **M1.1 Python reference model.** `sim/model.py`: holdings(range, L, sqrtP) using exact CL formulas, NAV at fair
   price, immediate leakage, markout alpha, loss, budget update, tier. Pure Python ints / Fractions, no floats in core.
   `sim/test_model.py` with hand-checked examples (in-range, below range, above range, full range).
-  _Accept:_ `python3 -m pytest sim -q` passes.
+  _Accept:_ `python -m pytest sim -q` passes.
 - [x] **M1.2 Test vectors.** `sim/gen_vectors.py` writes `test/vectors/*.json` (>= 200 random cases per function,
   realistic tick ranges, edge cases at range boundaries and extreme prices). Deterministic seed.
   _Accept:_ vectors generated and committed; generator documented in sim/README.md.
@@ -66,10 +66,11 @@ as pure libraries with heavy tests, before any vault plumbing.
 
 - [x] **M2.6 Proportional budget scaling + pump bound.** When bMax grows from positive alpha, scale budget by
   bMax_new / bMax_old (floor) so budget/bMax is unchanged; success never changes tier, only time refill or guardian
-  restore does. Enforce k <= 1e18 in the constructor (Tenure__ReputationGainTooHigh). Update sim/model.py first,
+  restore does. Enforce k <= 1e18 in RiskBudget.validate at registerPool (Tenure__ReputationGainTooHigh); BudgetParams
+  are per pool, not constructor args. Update sim/model.py first,
   regenerate vectors, then RiskBudget.sol.
   _Accept:_ fuzz: tier never changes on a positive-alpha settle; ratio preserved within 1 wei (rounded down);
-  constructor reverts for k > 1e18; a test shows pumping alpha by paying the vault X never increases the attacker's
+  registerPool reverts for k > 1e18; a test shows pumping alpha by paying the vault X never increases the attacker's
   net extractable value; differential tests pass; docs/MATH.md has the pump-bound argument.
 
 ## M3 — The vault
@@ -102,15 +103,27 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Accept:_ A stays FULL on every seed; C's worst-case loss is below B's median loss, or the result is reported
   honestly in RESULTS.md with an explanation if not.
 - [ ] **M4.2c Contract size headroom.** Get the hook at least 2,000 bytes under 24,576 in the deploy profile.
-  Try lowering optimizer_runs in the deploy profile first; if insufficient, move scoring math into an external
-  library or separate scorer contract. _Accept:_ size report shows >= 2,000 bytes headroom; full suite and
-  gas assertions still pass (re-measure; any gas increase is recorded under Decisions made).
-- [ ] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`: NAV over
-  time for B vs C with tier changes marked; budget over time.
+  Use EXTERNAL library functions (linked at deploy) for the heaviest pure math; keep all state and authorization
+  in the hook; linking must work in tests and scripts. _Accept:_ size report shows >= 2,000 bytes headroom; full suite and
+  gas assertions still pass (re-measure afterSwap gas under BOTH profiles against the 213,240 bound; any gas
+  increase is recorded under Decisions made).
+- [ ] **M4.3 Charts.** `sim/plot_results.py` (matplotlib) -> `docs/results/headline.png`, `slow_bleed.png`,
+  `sweep.png`. Headline: runs B and C on the same axes with tier changes marked, readable at a glance; budget over
+  time. Sweep: per-seed B vs C loss, sorted.
   _Accept:_ PNGs generated from the CSVs.
 - [ ] **M4.4 Local demo script.** `script/Demo.s.sol` runnable on anvil that deploys everything and replays scenario C
   with readable logs. `docs/DEMO.md` with exact commands.
   _Accept:_ runs end-to-end on a fresh anvil.
+- [ ] **M4.6 Chainlink reference price.** ChainlinkReferencePrice implementing IReferencePrice using
+  AggregatorV3Interface (vendor only the interface, pinned). Convert the feed answer + decimals for both
+  tokens into a fair sqrtPriceX96; staleness from updatedAt; revert on non-positive answers or incomplete
+  rounds. Lives outside the hook. _Accept:_ unit + fuzz tests against a mock aggregator, including decimals
+  combinations (6/8/18), stale and negative answers; differential check vs sim/model.py conversion.
+- [ ] **M5.4 Settlement gas.** (Moved up: M4.5a depends on settleMany and autoSettlePerSwap = 0.)
+  Cap afterSwap auto-settle at 1 record per swap (config param, per pool), and allow auto-settle count = 0 per pool (opt-out: swappers pay nothing extra; settlement is then done by
+  keepers). Keep settle() permissionless, add settleMany(ids) for keepers. Try to reduce the fee-aware
+  settlement cost raised in M3.3 (e.g. pack RebalanceRecord / BudgetState). _Accept:_ gas snapshot shows
+  afterSwap overhead with 0 and 1 due records, and with auto-settle = 0; README explains the cost model.
 - [ ] **M4.5a Reactive settlement.** Install Reactive-Network/reactive-lib and reactive-test-lib (pin exact
   commits). Build TenureSettlerRC (Reactive side): subscribes to RebalanceScored on the origin chain and to cron;
   tracks pending records; when due, emits a Callback that calls TenureReactiveReceiver.settleMany(ids) on the
@@ -126,7 +139,6 @@ as pure libraries with heavy tests, before any vault plumbing.
   relay trust model.
 - [H] Ask Reactive dev chat: best way to time a 50-block origin-chain window; confirm current callback proxy
   addresses; get Lasna testnet funds.
-- [H] Testnet deploy: Unichain Sepolia + Base Sepolia + Lasna, burner keys only.
 
 ## M5 — Hardening (judges probe these)
 - [ ] **M5.1 Invariant tests.** Handler-based invariants: vault solvency (shares * NAV <= holdings), budget bounds,
@@ -135,11 +147,6 @@ as pure libraries with heavy tests, before any vault plumbing.
   curator, window gaming, curator bypass attempts (direct PoolManager calls), reentrancy via hooks.
   Document each in docs/THREAT_MODEL.md with result.
 - [ ] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
-- [ ] **M5.4 Settlement gas.** Cap afterSwap auto-settle at 1 record per swap (config param, per pool),
-  and allow auto-settle count = 0 per pool (opt-out: swappers pay nothing extra; settlement is then done by
-  keepers). Keep settle() permissionless, add settleMany(ids) for keepers. Try to reduce the fee-aware
-  settlement cost raised in M3.3 (e.g. pack RebalanceRecord / BudgetState). _Accept:_ gas snapshot shows
-  afterSwap overhead with 0 and 1 due records, and with auto-settle = 0; README explains the cost model.
 
 ## M6 — Submission materials
 - [ ] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy
@@ -158,5 +165,6 @@ as pure libraries with heavy tests, before any vault plumbing.
 ## Human-only
 - [H] Confirm UHI11 rules (one prize per project?), submission format, demo length.
 - [H] Pitch idea to mentors at office hours; record feedback in docs/FEEDBACK.md.
-- [H] Testnet deployment with a burner key; record addresses in README.
+- [H] Testnet deploy with burner keys only: Unichain Sepolia + Reactive Lasna (+ Base Sepolia only if M4.5b is
+  done); record addresses in README.
 - [H] Record demo video.
