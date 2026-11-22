@@ -500,3 +500,38 @@ Decisions made:
 - The relay is a liveness aid only: no trust is needed for correctness (THREAT_MODEL section 4).
 Notes for human: please double-check the pinned commits are the versions you intended (lib/ was empty when this
 run started).
+
+## 2026-11-22T18:19Z — M4.5b Cross-chain freeze propagation — IMPLEMENTED, deploy-profile verification PENDING (task left [ ])
+What: freeze propagation lands in CuratedVault, not the hook (human decision). CuratedVault: freezeReceiver
+(owner-set via setFreezeReceiver; 0 = disabled), relayFrozen flag set only by relayFreeze() from that receiver
+(idempotent), cleared only by clearRelayFreeze() from hook.guardian(); rebalance reverts Tenure__RelayFrozen while
+set; deposits, withdrawals and safe mode unaffected. src/reactive/TenureFreezeReceiver.sol (AbstractCallback, only
+freeze(rvmId, vault, srcChain, srcPool)); src/reactive/TenureFreezeRC.sol (TierChanged on both endpoints; relays
+only transitions INTO FROZEN, once per episode; resets when that side leaves FROZEN).
+Files: src/CuratedVault.sol, src/reactive/TenureFreezeRC.sol, src/reactive/TenureFreezeReceiver.sol,
+test/reactive/FreezePropagation.t.sol, docs/THREAT_MODEL.md (section 5)
+Tests: 9 added / 218 passing under the DEFAULT profile (includes HookSizeFrozen: hook unchanged at 29,180 B).
+NOT YET RUN: FOUNDRY_PROFILE=deploy forge build --sizes and FOUNDRY_PROFILE=deploy forge test - the background
+run was killed by Claude Code because the machine was critically low on memory (not a test failure). Per the
+rules the task stays [ ] until that passes.
+Acceptance status: invariant test (receiver as msg.sender reverts on every vault/hook admin and curator function;
+every non-freeze payload via the proxy fails; vault accepts relayFreeze only from its own receiver); A->B with a
+real hook driven to FROZEN by measured leaks; B->A via a TierChanged-shaped emitter standing in for chain B's
+hook; duplicates relayed once per episode; replayed callbacks idempotent and can never unfreeze; withdrawals and
+safe mode work while relay-frozen; THREAT_MODEL section 5 (trust model, replays, no echo, compromised relay =
+can only freeze an honest curator, no fund loss).
+Decisions made:
+- "Local guardian" = the hook's guardian (CuratedVault has none of its own); it already restores FROZEN tiers.
+- Chain B's hook is a TierEmitter mock in tests (one EVM cannot host two chains' hooks at the flag address);
+  chain B's vault is a real CuratedVault on a second pool of the same hook binary.
+Notes for human: run `FOUNDRY_PROFILE=deploy forge build --sizes` (expect TenureHook 22,528 B) and
+`FOUNDRY_PROFILE=deploy forge test` (expect 218 passing); if both pass, mark M4.5b [x].
+
+## Handoff — 2026-11-22T18:19Z
+Where I stopped: M4.5b implemented and committed; only its deploy-profile verification is pending (see above).
+main: default profile 218 tests green; sim 53 (unchanged this session). Not pushed.
+Done since the last handoff: deps pinned (reactive-lib f6990ce, reactive-test-lib 2ff9b2a: lib/ did NOT contain
+them at the start of this run, so they were installed per the plan), M4.5a (Reactive settlement), M4.5b (above).
+TenureHook bytecode is unchanged by both (pinned in test/HookSizeFrozen.t.sol: default 29,180 / deploy 22,528).
+Next: verify M4.5b under the deploy profile, then M5.1 invariants, M5.2 attack tests, M5.3 gas report, M6.x.
+Watch out: deploy-profile builds are memory-hungry on this machine; run them alone (close other heavy apps).

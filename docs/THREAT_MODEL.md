@@ -97,3 +97,27 @@ zero bytes to TenureHook; `test/HookSizeFrozen.t.sol` pins the hook size in both
   registration, so the pool cannot fall back to swap-driven settlement on its own. Picking the moment is bounded by the hook's anti-gaming rule: settlement needs
   a fresh oracle and spot within `maxSettleDev` of fair, the same as for any keeper. No funds can move: the
   receiver can only call `settleMany`.
+
+## 5. Cross-chain freeze propagation (M4.5b)
+
+One curator can run Tenure-gated vaults on two chains. `TenureFreezeRC` watches `TierChanged` for that curator's
+pool on chain A and on chain B. When one side enters FROZEN, it calls `TenureFreezeReceiver` on the other chain,
+which sets `CuratedVault.relayFrozen`, and that flag blocks the curator's `rebalance`. Nothing changes in
+TenureHook: the flag lives in the vault, and the hook size is pinned by `test/HookSizeFrozen.t.sol`.
+- **SAFETY INVARIANT: the relay can only freeze.** The receiver's single vault call is `relayFreeze`, which can
+  only set the flag. Clearing it (`clearRelayFreeze`) is guardian-only: the hook's guardian, the same party that
+  restores a FROZEN tier. The relay never touches the hook's tier or budget. Deposits, withdrawals and safe mode
+  are unaffected. Proven in `test/reactive/FreezePropagation.t.sol::test_invariant_receiverCanOnlyFreeze`: as
+  msg.sender, the receiver reverts on every vault and hook admin or curator function, and every non-`freeze`
+  payload through the proxy fails.
+- **Trust model:** a vault accepts relays only from the receiver its owner set (`setFreezeReceiver`; address(0)
+  disables relays). The receiver accepts only the callback proxy carrying our RVM ID.
+- **Duplicates and replays:** the RC relays once per FROZEN episode. A duplicate notification is ignored until
+  that side leaves FROZEN (guardian restore). At the vault, `relayFreeze` is idempotent. A replayed callback
+  after the guardian cleared the flag re-freezes: that costs liveness, never funds, and only in the safe direction.
+- **No echo:** a relayed freeze emits no `TierChanged`, so A and B cannot ping-pong.
+- **Compromised relay, worst case:** it can freeze an honest curator's vault on the other chain. The curator
+  cannot rebalance until the guardian clears the flag. Depositors keep full access (withdrawals stay open, and safe
+  mode is still allowed), and no funds can move: the relay has no path to tokens, shares, the mandate or the
+  budget. A malicious vault owner could point the vault at a hostile receiver, but that receiver can still only
+  freeze.

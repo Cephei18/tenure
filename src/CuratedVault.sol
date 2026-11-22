@@ -50,6 +50,9 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
     error Tenure__SpotDeviation(uint256 dev, uint256 maxDev);
     error Tenure__DepositCapExceeded(uint256 navAfter, uint256 cap);
     error Tenure__InsufficientShares();
+    error Tenure__NotFreezeReceiver();
+    error Tenure__NotGuardian();
+    error Tenure__RelayFrozen();
 
     // ------------------------------------------------------------------------------------------------ types
     /// @notice A curator decision. Removes ALL liquidity from the current range, optionally swaps, then adds
@@ -88,6 +91,11 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
     // ------------------------------------------------------------------------------------------------ state
     address public owner;
     address public curator;
+    /// @notice Contract allowed to set `relayFrozen` (TenureFreezeReceiver; M4.5b). address(0) = none.
+    address public freezeReceiver;
+    /// @notice Set when the same curator was FROZEN on another chain (relayed). Blocks curator rebalances only.
+    ///         Only the hook's guardian can clear it; deposits, withdrawals and safe mode are unaffected.
+    bool public relayFrozen;
 
     // ------------------------------------------------------------------------------------------------ events
     event Deposit(address indexed sender, address indexed receiver, uint256 amount0, uint256 amount1, uint256 shares);
@@ -96,6 +104,9 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
     event SafeMode(address indexed caller, uint128 liquidityRemoved);
     event CuratorChanged(address indexed previous, address indexed next);
     event OwnershipTransferred(address indexed previous, address indexed next);
+    event FreezeReceiverSet(address indexed previous, address indexed next);
+    event RelayedFreeze(uint256 indexed sourceChainId, bytes32 indexed sourcePoolId, bool wasFrozen);
+    event RelayFreezeCleared(address indexed guardian);
 
     constructor(
         IPoolManager _poolManager,
@@ -140,6 +151,29 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
         if (next == address(0)) revert Tenure__ZeroAddress();
         emit CuratorChanged(curator, next);
         curator = next;
+    }
+
+    /// @notice Choose the contract that may relay a FROZEN tier from another chain (M4.5b). It can only ever
+    ///         freeze: clearing stays with the local guardian. address(0) disables relayed freezes.
+    function setFreezeReceiver(address next) external onlyOwner {
+        emit FreezeReceiverSet(freezeReceiver, next);
+        freezeReceiver = next;
+    }
+
+    /// @notice Relay entry point: the curator of this vault was FROZEN elsewhere, so block its rebalances here too.
+    /// @dev SAFETY INVARIANT: the relay path can only set the flag. Idempotent: a duplicate or replayed relay is a
+    ///      no-op beyond the event.
+    function relayFreeze(uint256 sourceChainId, bytes32 sourcePoolId) external {
+        if (msg.sender != freezeReceiver) revert Tenure__NotFreezeReceiver(); // never address(0): unset = disabled
+        emit RelayedFreeze(sourceChainId, sourcePoolId, relayFrozen);
+        relayFrozen = true;
+    }
+
+    /// @notice Lift a relayed freeze. Only the hook's guardian (the same party that restores a FROZEN tier).
+    function clearRelayFreeze() external {
+        if (msg.sender != hook.guardian()) revert Tenure__NotGuardian();
+        relayFrozen = false;
+        emit RelayFreezeCleared(msg.sender);
     }
 
     /// @notice Transfer vault ownership.
@@ -298,6 +332,7 @@ contract CuratedVault is ERC20, ReentrancyGuard, IUnlockCallback {
     ///         hook.endRebalance. The hook snapshots holdings before/after, enforces mandate + tier, and scores it.
     /// @return recordId The hook's RebalanceRecord id for markout settlement.
     function rebalance(RebalanceParams calldata p) external onlyCurator nonReentrant returns (uint256 recordId) {
+        if (relayFrozen) revert Tenure__RelayFrozen();
         PoolKey memory key = poolKey();
         hook.beginRebalance(key);
         poolManager.unlock(abi.encode(Action.REBALANCE, abi.encode(p)));
