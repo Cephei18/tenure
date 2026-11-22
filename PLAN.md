@@ -111,7 +111,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   `sweep.png`. Headline: runs B and C on the same axes with tier changes marked, readable at a glance; budget over
   time. Sweep: per-seed B vs C loss, sorted.
   _Accept:_ PNGs generated from the CSVs.
-- [ ] **M4.4 Local demo script.** `script/Demo.s.sol` runnable on anvil that deploys everything and replays scenario C
+- [x] **M4.4 Local demo script.** `script/Demo.s.sol` runnable on anvil that deploys everything and replays scenario C
   with readable logs. `docs/DEMO.md` with exact commands.
   _Accept:_ runs end-to-end on a fresh anvil.
 - [ ] **M4.6 Chainlink reference price.** ChainlinkReferencePrice implementing IReferencePrice using

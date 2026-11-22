@@ -365,3 +365,33 @@ Decisions made:
   FROZEN and that A has no tier marks).
 - Labels floor to whole tokens so they match RESULTS.md (B median 6,450.58 -> 6,450).
 Notes for human: after any scenario change, rerun forge test (rewrites the CSVs) then python sim/plot_results.py.
+
+## 2026-11-22T16:11Z — M4.4 Local demo script — DONE
+What: two-part anvil demo of scenario C (poisoned curator + Tenure), documented in docs/DEMO.md.
+- script/Demo.s.sol (FOUNDRY_PROFILE=deploy, chain 31337 only) deploys everything for real: PoolManager
+  (hookmate pinned bytecode), mock tokens, TenureHook via HookMiner CREATE2 (+ auto-linked TenureScorer), mock
+  oracle, 1:1 pool with 2e23 full-range third-party liquidity (DemoLiquidity), CuratedVault + 40k/40k deposit,
+  the scenario actors from test/scenario (seeded Market 0x7e2a, PoisonedCurator, Attacker) and a DemoDirector.
+- script/demo/DemoActors.sol: DemoDirector.tick() = one scenario block (mirrors HeadlineBase's per-block body and
+  _attackStep); status()/note() give readable log lines; owns the vault only to enter safe mode once FROZEN.
+- script/demo.sh: deploy, then one tick() transaction per block (anvil mines one block per tx, so cooldowns and
+  the 50-block markout window are real blocks), then the depositor withdraws everything while FROZEN.
+- script/base/TenureHookDeployer.sol: shared HookMiner deployment (DeployTenureHook now uses it).
+Result on a fresh anvil (run twice, identical): poisoned at tick 20, 3 attack rounds (attacker +613), FULL ->
+FROZEN at tick 80 (budget 55.8% -> 2.9% when markouts settled), safe mode, all 110 ticks succeeded, depositor
+redeemed all shares while FROZEN (2,564.74 token0 + 77,071.60 token1). ~1.5 min with a warm build.
+Files: script/Demo.s.sol, script/demo.sh, script/demo/DemoActors.sol, script/base/TenureHookDeployer.sol (new),
+script/DeployTenureHook.s.sol, docs/DEMO.md (new), PLAN.md
+Tests: 0 added / 175 passing (default). Demo verified end-to-end on anvil (acceptance). forge fmt OK.
+Decisions made:
+- A single forge script cannot replay a multi-block scenario (its simulation runs every tx in one block; vm.roll
+  does not move a live chain), hence script + per-block transactions from bash.
+- demo.sh sends ticks with a fixed 25M gas limit and checks every receipt. The first run used cast's gas
+  estimate and 3 of 110 ticks reverted on-chain silently (cast send exits 0 on a reverted receipt); the curator's
+  try/catch makes eth_estimateGas unreliable. The script now aborts on any failed tx and asserts ticks == TICKS.
+- POISON_AT defaults to 20 (not 100) to keep the demo short; numbers therefore differ slightly from the
+  600-block headline, shape identical.
+- No Foundry test runs the demo: under the default (non-IR) profile the hook is over EIP-170, so a CREATE2
+  deploy inside a test would fail; the acceptance is the live anvil run. Demo.s.sol keeps its deployments in
+  storage so it still compiles under the default profile (stack-too-deep otherwise).
+Notes for human: run `anvil` then `bash script/demo.sh` (Git Bash on Windows). Good material for the video.
