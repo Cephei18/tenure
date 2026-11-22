@@ -403,3 +403,46 @@ def ideal_position_holdings(pos: Position, s: int) -> tuple[Fraction, Fraction]:
 def ideal_nav(h: tuple[Fraction, Fraction], s_fair: int) -> Fraction:
     p = Fraction(s_fair, Q96) ** 2
     return h[0] * p + h[1]
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# M4.6 Chainlink reference price: USD (or direct) feeds -> fair sqrtPriceX96 (mirrors ChainlinkPriceLib.sol)
+# --------------------------------------------------------------------------------------------------------------------
+TWO_64 = 1 << 64
+
+
+def _isqrt(x: int) -> int:
+    """floor(sqrt(x)) for x >= 0 (OpenZeppelin Math.sqrt, default rounding = floor)."""
+    from math import isqrt
+
+    return isqrt(x)
+
+
+def chainlink_sqrt_price_x96(a0: int, fd0: int, a1: int, fd1: int, dec0: int, dec1: int) -> int:
+    """Fair sqrt price (token1 per token0, raw units, Q64.96) from two Chainlink answers.
+
+    a0 = price of token0 in a common quote (fd0 feed decimals), a1 = same for token1. A DIRECT feed (token0 quoted
+    in token1) is the special case a1 = 1, fd1 = 0. dec0/dec1 are the ERC-20 decimals. Raw price:
+        P = (a0 / 10^fd0) / (a1 / 10^fd1) * 10^dec1 / 10^dec0 = num / den,  e = fd1 + dec1 - fd0 - dec0
+    sqrtPriceX96 = floor(sqrt(P * 2^192)) when P < 2^64 (exact to 1 unit); otherwise
+                   floor(sqrt(P * 2^128)) << 32 (relative error < 2^-96), so the mulDiv never overflows.
+    Raises on non-positive answers, uint256 overflow, or a result outside [MIN_SQRT_PRICE, MAX_SQRT_PRICE).
+    """
+    if a0 <= 0 or a1 <= 0:
+        raise ValueError("non-positive answer")
+    e = fd1 + dec1 - fd0 - dec0
+    num, den = (a0 * 10**e, a1) if e >= 0 else (a0, a1 * 10 ** (-e))
+    if num > UINT256_MAX or den > UINT256_MAX:
+        raise OverflowError("scale overflow")
+    if num // den < TWO_64:
+        s = _isqrt(mul_div(num, 1 << 192, den))
+    else:
+        s = _isqrt(mul_div(num, 1 << 128, den)) << 32
+    if s < MIN_SQRT_PRICE or s >= MAX_SQRT_PRICE:
+        raise ValueError("price out of range")
+    return s
+
+
+def ideal_chainlink_price(a0: int, fd0: int, a1: int, fd1: int, dec0: int, dec1: int) -> Fraction:
+    """Exact raw price P (token1 per token0) for the ideal layer."""
+    return Fraction(a0, 10**fd0) / Fraction(a1, 10**fd1) * Fraction(10**dec1, 10**dec0)

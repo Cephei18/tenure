@@ -395,3 +395,31 @@ Decisions made:
   deploy inside a test would fail; the acceptance is the live anvil run. Demo.s.sol keeps its deployments in
   storage so it still compiles under the default profile (stack-too-deep otherwise).
 Notes for human: run `anvil` then `bash script/demo.sh` (Git Bash on Windows). Good material for the video.
+
+## 2026-11-22T16:28Z — M4.6 Chainlink reference price — DONE
+What: src/ChainlinkReferencePrice.sol implements IReferencePrice from Chainlink feeds, outside the hook. Two
+modes per pool: token0/USD + token1/USD, or one direct token0/token1 feed (feed1 = 0). Conversion in
+src/libraries/ChainlinkPriceLib.sol: P = a0*10^(fd1+dec1) / (a1*10^(fd0+dec0)); sqrtPriceX96 =
+floor(sqrt(P*2^192)) for P < 2^64, else floor(sqrt(P*2^128)) << 32 (relative error < 2^-96); range-checked.
+Staleness: returns the OLDER feed's updatedAt; the hook enforces maxOracleAge. Non-positive answers and incomplete
+rounds (updatedAt == 0 or answeredInRound < roundId) revert. Feeds are set once per pool (owner), never replaced.
+AggregatorV3Interface vendored (interface only) in src/interfaces/. Model first: sim/model.py
+chainlink_sqrt_price_x96 + ideal layer; 240 vectors (test/vectors/chainlink.json; earlier vector files unchanged).
+Files: src/ChainlinkReferencePrice.sol, src/libraries/ChainlinkPriceLib.sol, src/interfaces/AggregatorV3Interface.sol,
+test/ChainlinkReferencePrice.t.sol, test/diff/ChainlinkPriceDiff.t.sol, test/utils/MockAggregator.sol,
+sim/model.py, sim/test_model.py, sim/gen_vectors.py, sim/test_vectors_fresh.py, test/vectors/chainlink.json,
+sim/README.md, docs/MATH.md, docs/THREAT_MODEL.md (section 3), PLAN.md
+Tests: 16 added / 191 passing. sim 53 passed. Deploy build OK: ChainlinkReferencePrice 2,987 B; hook unchanged
+(21,907 B). forge fmt OK.
+Acceptance: unit + fuzz vs mock aggregators incl. decimals 6/8/18 (parity fuzz: equal USD prices + equal token
+decimals => exactly Q96 for every feed-decimals combination; token-decimals fuzz checks the floor bracket),
+stale (older feed wins; ReferencePriceLib.readFresh reverts Tenure__StalePrice), negative/zero answers,
+incomplete rounds; differential: all 240 vectors exact through the adapter with mock feeds, including the
+27 revert cases.
+Decisions made:
+- Feeds immutable per pool (owner could otherwise choose the scoring price). Decimals capped at 36.
+- An invalid answer REVERTS rather than returning 0: readFresh reverts either way, and afterSwap's try/catch
+  skips settlement, so swaps are never blocked.
+- No feed-vs-TWAP deviation guard yet (listed as residual risk in THREAT_MODEL section 3).
+Notes for human: for a testnet deploy, use real Chainlink feed addresses for the chain (e.g. ETH/USD and USDC/USD
+on Unichain Sepolia / Base Sepolia, if available) and pass token decimals explicitly to setFeeds.

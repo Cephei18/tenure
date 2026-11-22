@@ -77,3 +77,14 @@ Rounding: new fees down, counterfactual fees up. Known limitation: rule 3's uppe
 abandoned old range would in truth have gone out of range; it never favors the curator.
 Evidence: `test/diff/DecisionScoreDiff.t.sol::test_diff_feesAlpha` (240 vectors, exact),
 `test/TenureHookFees.t.sol` (exactness vs v4's owed fees, exit snapshot, fallback, 500-block honest run).
+
+## Fair price from Chainlink feeds (M4.6)
+
+With `a0` the token0 answer (fd0 decimals) and `a1` the token1 answer (fd1 decimals) in a common quote, and token
+decimals dec0 and dec1, the raw pool price (token1 base units per token0 base unit) is
+`P = a0 * 10^(fd1 + dec1) / (a1 * 10^(fd0 + dec0))`. A direct feed is the special case a1 = 1, fd1 = 0.
+`sqrtPriceX96 = floor(sqrt(P * 2^192))` while P < 2^64 (exact to 1 unit). Above that, P * 2^192 would overflow, so
+the code computes `floor(sqrt(P * 2^128)) << 32`; the result is then >= 2^128, so the relative error is < 2^-96.
+Both round down. Worked example: ETH/USD = 3,000 and USDC/USD = 1 (8-decimal feeds), with WETH (18) as token0
+and USDC (6) as token1. Then P = 3,000 * 10^6 / 10^18 = 3e-9 and sqrtPriceX96 = 4,339,505,179,874,779,489,431,521
+(`test_wethUsdc_handExample`; `sim/test_model.py` checks it against the exact rational value).

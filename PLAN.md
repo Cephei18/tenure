@@ -114,7 +114,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [x] **M4.4 Local demo script.** `script/Demo.s.sol` runnable on anvil that deploys everything and replays scenario C
   with readable logs. `docs/DEMO.md` with exact commands.
   _Accept:_ runs end-to-end on a fresh anvil.
-- [ ] **M4.6 Chainlink reference price.** ChainlinkReferencePrice implementing IReferencePrice using
+- [x] **M4.6 Chainlink reference price.** ChainlinkReferencePrice implementing IReferencePrice using
   AggregatorV3Interface (vendor only the interface, pinned). Convert the feed answer + decimals for both
   tokens into a fair sqrtPriceX96; staleness from updatedAt; revert on non-positive answers or incomplete
   rounds. Lives outside the hook. _Accept:_ unit + fuzz tests against a mock aggregator, including decimals

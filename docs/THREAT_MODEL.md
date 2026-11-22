@@ -61,3 +61,21 @@ valued at the fair price against the counterfactual of keeping the old range, an
 vault's token0 below fair shows up as negative alpha. That drains the risk budget, so the curator steps down
 FULL -> RESTRICTED -> FROZEN after a bounded number of rounds (headline scenario, M4.2). Any swap the curator
 makes at the manipulated spot is additionally caught as immediate leakage.
+
+## 3. The fair-price oracle (M4.6: Chainlink adapter)
+
+Everything Tenure measures is valued at the reference price, so the oracle is part of the trust base.
+`src/ChainlinkReferencePrice.sol` turns Chainlink feeds (token0/USD and token1/USD, or one direct token0/token1 feed)
+into a fair sqrtPriceX96 (`src/libraries/ChainlinkPriceLib.sol`, exact vs `sim/model.py`, 240 vectors).
+- **Bad answers:** non-positive answers and incomplete rounds (`updatedAt == 0` or `answeredInRound < roundId`)
+  revert. A price outside v4's sqrt-price range reverts.
+- **Stale answers:** the adapter reports the OLDER feed's `updatedAt`. The hook rejects it past the pool's
+  `maxOracleAge` (`Tenure__StalePrice`), and `afterSwap` simply skips settlement, so swaps never revert.
+- **Owner picks the price:** feeds are set ONCE per pool and cannot be replaced. Swapping a feed would let the
+  owner choose the price every decision is scored at. A different source needs a new adapter and a new pool
+  registration, which depositors can see coming and exit before.
+- **Residual risk (not solved here):** a compromised or deprecated Chainlink feed. A deviation check against a
+  second source (e.g. a pool TWAP) is future work. Settlement also requires spot near fair (`maxSettleDev`), so a
+  feed far from the market stalls markouts rather than scoring them.
+Evidence: `test/ChainlinkReferencePrice.t.sol` (decimals 6/8/18, direct and two-feed modes, stale, negative and
+incomplete answers, set-once), `test/diff/ChainlinkPriceDiff.t.sol`.

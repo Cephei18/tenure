@@ -21,6 +21,7 @@ from model import (  # noqa: E402
     BudgetParams,
     Position,
     charge,
+    chainlink_sqrt_price_x96,
     credit,
     deposit_cap,
     estimate_fees,
@@ -269,11 +270,35 @@ def gen_fees(rng):
     return cases
 
 
+def gen_chainlink(rng):
+    """M4.6: Chainlink answers + feed/token decimals -> fair sqrtPriceX96 (or a revert)."""
+    cases = []
+    decs = [6, 8, 18]
+    for i in range(N):
+        fd0, dec0, dec1 = rng.choice(decs), rng.choice(decs), rng.choice(decs)
+        direct = i % 5 == 0  # single token0/token1 feed: a1 = 1, fd1 = 0
+        fd1 = 0 if direct else rng.choice(decs)
+        a0 = rng.randrange(1, 10 ** rng.randrange(1, 28))
+        a1 = 1 if direct else rng.randrange(1, 10 ** rng.randrange(1, 28))
+        if i % 17 == 3:
+            a0 = -rng.randrange(0, 10**10)  # non-positive answers must revert
+        elif i % 19 == 4 and not direct:
+            a1 = -rng.randrange(0, 10**10)
+        try:
+            s_ = chainlink_sqrt_price_x96(a0, fd0, a1, fd1, dec0, dec1)
+            ok = True
+        except (ValueError, OverflowError):
+            s_, ok = 0, False
+        cases.append({"a0": s(a0), "fd0": fd0, "a1": s(a1), "fd1": fd1, "dec0": dec0, "dec1": dec1,
+                      "direct": direct, "ok": ok, "sqrtPriceX96": s(s_)})
+    return cases
+
+
 def main():
     rng = random.Random(SEED)
     os.makedirs(OUT, exist_ok=True)
     gens = [("holdings", gen_holdings), ("nav", gen_nav), ("leakage", gen_leakage), ("alpha", gen_alpha),
-            ("loss", gen_loss), ("budget", gen_budget), ("fees", gen_fees)]
+            ("loss", gen_loss), ("budget", gen_budget), ("fees", gen_fees), ("chainlink", gen_chainlink)]
     for name, fn in gens:
         cases = fn(rng)
         with open(os.path.join(OUT, f"{name}.json"), "w", newline="\n") as f:

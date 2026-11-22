@@ -6,6 +6,8 @@ from fractions import Fraction
 
 import pytest
 
+import model
+
 from model import (
     FROZEN,
     FULL,
@@ -404,3 +406,59 @@ def test_alpha_fees_noop_is_zero_and_fees_count():
     assert with_fees > base
     # adding fees f to the new side raises alpha by NAV(f) up to rounding
     assert with_fees - base >= nav(fees, s_t, False) - 2
+
+
+# ---------------------------------------------------------------------------------------------------- M4.6 Chainlink
+def _ideal_sqrt_x96(p):
+    """floor(sqrt(p) * 2^96) for a Fraction p, exactly."""
+    from math import isqrt
+
+    return isqrt(p.numerator * (1 << 192) // p.denominator)
+
+
+def test_chainlink_hand_example_weth_usdc():
+    # ETH/USD = 3000 (8 dec), USDC/USD = 1 (8 dec); token0 WETH (18), token1 USDC (6): P = 3000e6 / 1e18 = 3e-9
+    s = model.chainlink_sqrt_price_x96(3000 * 10**8, 8, 10**8, 8, 18, 6)
+    assert s == _ideal_sqrt_x96(model.ideal_chainlink_price(3000 * 10**8, 8, 10**8, 8, 18, 6))
+    # direct feed (a1 = 1, fd1 = 0) is the same price
+    assert model.chainlink_sqrt_price_x96(3000 * 10**8, 8, 1, 0, 18, 6) == s
+
+
+def test_chainlink_price_one():
+    assert model.chainlink_sqrt_price_x96(10**8, 8, 10**8, 8, 18, 18) == model.Q96
+    assert model.chainlink_sqrt_price_x96(10**18, 18, 10**6, 6, 6, 6) == model.Q96
+
+
+def test_chainlink_rejects_bad_answers():
+    for a0, a1 in [(0, 1), (-1, 1), (1, 0), (1, -5)]:
+        with pytest.raises(ValueError):
+            model.chainlink_sqrt_price_x96(a0, 8, a1, 8, 18, 18)
+    with pytest.raises(ValueError):  # below MIN_SQRT_PRICE
+        model.chainlink_sqrt_price_x96(1, 18, 10**30, 0, 18, 0)
+    with pytest.raises((ValueError, OverflowError)):  # above MAX_SQRT_PRICE / overflow
+        model.chainlink_sqrt_price_x96(10**30, 0, 1, 18, 0, 18)
+
+
+def test_chainlink_error_vs_ideal_is_floor_and_tiny():
+    import random
+
+    rng = random.Random(0x7E2A)
+    hits = {"low": 0, "high": 0}
+    for _ in range(3000):
+        fd0, fd1 = rng.choice([6, 8, 18]), rng.choice([0, 6, 8, 18])
+        dec0, dec1 = rng.choice([6, 8, 18]), rng.choice([6, 8, 18])
+        a0, a1 = rng.randrange(1, 10**rng.randrange(1, 30)), rng.randrange(1, 10**rng.randrange(1, 30))
+        p = model.ideal_chainlink_price(a0, fd0, a1, fd1, dec0, dec1)
+        try:
+            s = model.chainlink_sqrt_price_x96(a0, fd0, a1, fd1, dec0, dec1)
+        except (ValueError, OverflowError):
+            continue
+        exact = _ideal_sqrt_x96(p)
+        assert s <= exact  # always rounds down
+        if p < (1 << 64):
+            hits["low"] += 1
+            assert exact - s <= 1
+        else:
+            hits["high"] += 1
+            assert (exact - s) * (1 << 96) <= exact  # relative error < 2^-96
+    assert hits["low"] > 100 and hits["high"] > 100
