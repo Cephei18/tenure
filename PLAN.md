@@ -102,7 +102,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   to FROZEN, and A's minimum budget ratio. Write docs/results/sweep.csv and a summary table in docs/RESULTS.md.
   _Accept:_ A stays FULL on every seed; C's worst-case loss is below B's median loss, or the result is reported
   honestly in RESULTS.md with an explanation if not.
-- [ ] **M4.2c Contract size headroom.** Get the hook at least 2,000 bytes under 24,576 in the deploy profile.
+- [x] **M4.2c Contract size headroom.** Get the hook at least 2,000 bytes under 24,576 in the deploy profile.
   Use EXTERNAL library functions (linked at deploy) for the heaviest pure math; keep all state and authorization
   in the hook; linking must work in tests and scripts. _Accept:_ size report shows >= 2,000 bytes headroom; full suite and
   gas assertions still pass (re-measure afterSwap gas under BOTH profiles against the 213,240 bound; any gas

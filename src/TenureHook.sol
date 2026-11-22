@@ -5,7 +5,6 @@ import {BaseHook} from "@openzeppelin/uniswap-hooks/src/base/BaseHook.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
@@ -16,8 +15,8 @@ import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/Pool
 
 import {IReferencePrice} from "./interfaces/IReferencePrice.sol";
 import {ReferencePriceLib} from "./libraries/ReferencePriceLib.sol";
-import {PositionValue, Holdings, Range} from "./libraries/PositionValue.sol";
-import {DecisionScore} from "./libraries/DecisionScore.sol";
+import {Holdings, Range} from "./libraries/PositionValue.sol";
+import {TenureScorer} from "./libraries/TenureScorer.sol";
 import {FeesOwed} from "./libraries/FeesOwed.sol";
 import {RiskBudget, BudgetParams, BudgetState, Tier} from "./libraries/RiskBudget.sol";
 
@@ -426,7 +425,7 @@ contract TenureHook is BaseHook {
         PoolSettings storage s = _settings[id];
         uint160 fair = ReferencePriceLib.readFresh(configs[id].oracle, id, s.maxOracleAge);
         (uint160 spot,,,) = poolManager.getSlot0(id);
-        uint256 dev = _tickDistance(spot, fair);
+        uint256 dev = TenureScorer.tickDistance(spot, fair);
         if (dev > s.maxSettleDev) revert Tenure__SpotOffFair(dev, s.maxSettleDev);
         alpha = _settle(id, recordId, spot, fair);
         _advancePointer(id);
@@ -552,7 +551,7 @@ contract TenureHook is BaseHook {
             return;
         }
         (uint160 spot,,,) = poolManager.getSlot0(id);
-        if (_tickDistance(spot, fair) > s.maxSettleDev) return;
+        if (TenureScorer.tickDistance(spot, fair) > s.maxSettleDev) return;
 
         uint256 settled;
         for (uint256 scanned; scanned < MAX_AUTO_SCAN && ptr < len && settled < MAX_AUTO_SETTLE; ++scanned) {
@@ -573,16 +572,9 @@ contract TenureHook is BaseHook {
         alpha = _alphaWithFees(id, recordId, r, spot, fair);
         BudgetState memory b = _refilled(id);
         Tier before = b.tier;
-        BudgetParams memory p = _settings[id].budget;
         uint256 lossW;
         uint256 gainW;
-        if (alpha < 0) {
-            lossW = DecisionScore.lossWad(-alpha, r.navBefore);
-            RiskBudget.charge(b, p, lossW, uint256(-alpha));
-        } else {
-            gainW = DecisionScore.gainWad(alpha, r.navBefore);
-            RiskBudget.credit(b, p, gainW, uint256(alpha));
-        }
+        (b, lossW, gainW) = TenureScorer.applyMarkout(b, _settings[id].budget, alpha, r.navBefore);
         _storeBudget(id, b, before);
         emit MarkoutSettled(id, recordId, alpha, lossW, gainW, b.budget, b.bMax, b.tier);
     }
@@ -594,10 +586,7 @@ contract TenureHook is BaseHook {
         returns (int256)
     {
         Holdings[2] memory fees = _windowFees(id, recordId, r); // [counterfactual, new]
-        return
-            DecisionScore.markoutAlphaWithFees(
-                r.oldRange, r.idleOld, fees[0], r.newRange, r.idleNew, fees[1], spot, fair
-            );
+        return TenureScorer.alphaWithFees(r.oldRange, r.idleOld, fees[0], r.newRange, r.idleNew, fees[1], spot, fair);
     }
 
     /// @notice Fees credited to a record's counterfactual (old range) and new range as of now (tenure-math 4b).
@@ -621,10 +610,9 @@ contract TenureHook is BaseHook {
     {
         FeeSnap storage f = _feeSnaps[id][recordId];
         if (f.exited) return _exitedFees(f, r);
-        uint256[4] memory g; // [global0, global1, dGlobal0, dGlobal1]
+        uint256[4] memory g; // [globalNow0, globalNow1, globalThen0, globalThen1]
         (g[0], g[1]) = poolManager.getFeeGrowthGlobals(id);
-        g[2] = DecisionScore.feeGrowthDelta(g[0], f.global0);
-        g[3] = DecisionScore.feeGrowthDelta(g[1], f.global1);
+        (g[2], g[3]) = (f.global0, f.global1);
         (, int24 tick,,) = poolManager.getSlot0(id);
         fees[0] = _fees(id, r.oldRange, f.old0, f.old1, g, tick, true);
         fees[1] = _fees(id, r.newRange, f.new0, f.new1, g, tick, false);
@@ -633,18 +621,16 @@ contract TenureHook is BaseHook {
     /// @dev The new range was abandoned before settlement: compare both sides over [t, exit]. The new range's fees
     ///      are exact; the old range shares them only if it is the same range, else gets the global upper bound.
     function _exitedFees(FeeSnap storage f, RebalanceRecord storage r) internal view returns (Holdings[2] memory fees) {
-        uint256 dg0 = DecisionScore.feeGrowthDelta(f.exitGlobal0, f.global0);
-        uint256 dg1 = DecisionScore.feeGrowthDelta(f.exitGlobal1, f.global1);
-        uint256 dn0 = DecisionScore.feeGrowthDelta(f.exitNew0, f.new0);
-        uint256 dn1 = DecisionScore.feeGrowthDelta(f.exitNew1, f.new1);
+        uint256[4] memory g = [f.exitGlobal0, f.exitGlobal1, f.global0, f.global1];
+        uint256[4] memory inside = [f.exitNew0, f.exitNew1, f.new0, f.new1];
         bool same = r.oldRange.tickLower == r.newRange.tickLower && r.oldRange.tickUpper == r.newRange.tickUpper;
-        fees[0] = DecisionScore.estimateFees(dn0, dn1, dg0, dg1, r.oldRange.liquidity, same, true);
-        fees[1] = DecisionScore.estimateFees(dn0, dn1, dg0, dg1, r.newRange.liquidity, true, false);
+        fees[0] = TenureScorer.windowFees(g, inside, r.oldRange.liquidity, same, true);
+        fees[1] = TenureScorer.windowFees(g, inside, r.newRange.liquidity, true, false);
     }
 
     /// @dev Fees the hypothetical position `r` earned since record time. Trust the range's fee-growth-inside only if
-    ///      both ticks are initialized now; DecisionScore.estimateFees also rejects an inside delta above the global
-    ///      one and applies the curator-adverse fallback.
+    ///      both ticks are initialized now; DecisionScore.estimateFees (via TenureScorer.windowFees) also rejects an
+    ///      inside delta above the global one and applies the curator-adverse fallback.
     function _fees(PoolId id, Range memory r, uint256 then0, uint256 then1, uint256[4] memory g, int24 tick, bool cf)
         internal
         view
@@ -652,15 +638,7 @@ contract TenureHook is BaseHook {
     {
         if (r.liquidity == 0) return Holdings(0, 0);
         (uint256 in0, uint256 in1, bool initialized) = _insideGrowth(id, r, tick, g[0], g[1]);
-        return DecisionScore.estimateFees(
-            DecisionScore.feeGrowthDelta(in0, then0),
-            DecisionScore.feeGrowthDelta(in1, then1),
-            g[2],
-            g[3],
-            r.liquidity,
-            initialized,
-            cf
-        );
+        return TenureScorer.windowFees(g, [in0, in1, then0, then1], r.liquidity, initialized, cf);
     }
 
     /// @dev v4's fee-growth-inside formula from one getTickInfo per tick; `initialized` = both ticks have liquidity.
@@ -767,14 +745,13 @@ contract TenureHook is BaseHook {
         internal
         returns (Score memory sc)
     {
-        (sc.leak, sc.navBefore) =
-            DecisionScore.immediateLeakage(snap.oldRange, snap.idle, snap.spot, newR, idleNew, spotAfter, snap.fair);
+        (sc.leak, sc.navBefore, sc.movedW) =
+            TenureScorer.scoreRebalance(snap.oldRange, snap.idle, snap.spot, newR, idleNew, spotAfter, snap.fair);
         BudgetState memory b = _refilled(id);
         Tier before = b.tier;
-        sc.movedW = _checkMandate(id, b.tier, snap, newR, idleNew, spotAfter, sc.navBefore);
+        _checkMandate(id, b.tier, snap.fair, newR, sc.movedW);
         if (sc.navBefore != 0) {
-            sc.lossW = DecisionScore.lossWad(sc.leak, sc.navBefore);
-            if (sc.lossW != 0) RiskBudget.charge(b, _settings[id].budget, sc.lossW, uint256(sc.leak));
+            (b, sc.lossW) = TenureScorer.chargeLeak(b, _settings[id].budget, sc.leak, sc.navBefore);
             sc.recordId = _records[id].length;
             _records[id].push(
                 RebalanceRecord(snap.oldRange, newR, snap.idle, idleNew, sc.navBefore, uint64(block.number), false)
@@ -808,18 +785,9 @@ contract TenureHook is BaseHook {
         return Range(tl, tu, _liquidityAt(id, vault, tl, tu));
     }
 
-    /// @dev Mandate rules (tier-dependent). Returns the moved fraction for the event.
-    ///      "Moved" = value converted between tokens = |change in total token0 holdings| at the fair price. Re-ranging
-    ///      without a swap converts nothing (tokens just move between position and idle), so it is never "moved".
-    function _checkMandate(
-        PoolId id,
-        Tier tier,
-        Snapshot memory snap,
-        Range memory newR,
-        Holdings memory idleNew,
-        uint160 spotAfter,
-        uint256 navBefore
-    ) internal view returns (uint256 movedW) {
+    /// @dev Mandate rules (tier-dependent). `movedW` (from TenureScorer.scoreRebalance) = value converted between
+    ///      tokens as WAD of NAV_before; re-ranging without a swap converts nothing, so it is never "moved".
+    function _checkMandate(PoolId id, Tier tier, uint160 fair, Range memory newR, uint256 movedW) internal view {
         Mandate memory m = _settings[id].mandate;
         bool restricted = tier == Tier.RESTRICTED;
         if (newR.liquidity != 0) {
@@ -828,16 +796,10 @@ contract TenureHook is BaseHook {
             if (width < minW) revert Tenure__RangeTooNarrow(width, minW);
             if (width > m.maxWidth) revert Tenure__RangeTooWide(width, m.maxWidth);
             int256 center = (int256(newR.tickLower) + int256(newR.tickUpper)) / 2;
-            int256 fairTick = int256(TickMath.getTickAtSqrtPrice(snap.fair));
+            int256 fairTick = int256(TenureScorer.tickAt(fair));
             uint256 dist = uint256(center > fairTick ? center - fairTick : fairTick - center);
             if (dist > m.maxCenterDist) revert Tenure__RangeOffFair(dist, m.maxCenterDist);
         }
-        if (navBefore == 0) return 0;
-        Holdings memory hB = PositionValue.holdings(snap.oldRange, snap.idle.amount0, 0, snap.spot, true);
-        Holdings memory hA = PositionValue.holdings(newR, idleNew.amount0, 0, spotAfter, false);
-        uint256 d0 = hA.amount0 > hB.amount0 ? hA.amount0 - hB.amount0 : hB.amount0 - hA.amount0;
-        uint256 movedValue = PositionValue.navAt(Holdings(d0, 0), snap.fair, true);
-        movedW = FullMath.mulDivRoundingUp(movedValue, 1e18, navBefore);
         uint256 maxW = restricted ? uint256(m.maxMoveWad) / 2 : m.maxMoveWad;
         if (movedW > maxW) revert Tenure__MovedTooMuch(movedW, maxW);
     }
@@ -856,12 +818,6 @@ contract TenureHook is BaseHook {
 
     function _validateMandate(Mandate memory m) internal pure {
         if (m.minWidth == 0 || m.minWidth > m.maxWidth || m.maxMoveWad > 1e18) revert Tenure__InvalidMandate();
-    }
-
-    function _tickDistance(uint160 a, uint160 b) internal pure returns (uint256) {
-        int256 ta = TickMath.getTickAtSqrtPrice(a);
-        int256 tb = TickMath.getTickAtSqrtPrice(b);
-        return uint256(ta > tb ? ta - tb : tb - ta);
     }
 
     function _liquidityAt(PoolId id, address vault, int24 tl, int24 tu) internal view returns (uint128) {

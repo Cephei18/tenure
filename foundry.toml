@@ -23,6 +23,6 @@ seed = "0x7e2a"
 #   FOUNDRY_PROFILE=deploy forge test
 [profile.deploy]
 via_ir = true
-# TenureHook is 24,460 B here (EIP-170 limit 24,576 B). If it grows past the limit, lower optimizer_runs
-# (measured: 200 -> 100 saves ~430 B, 100 -> 30 only ~70 B more) or move code out of the hook. Do not ship over
-# the limit.
+# TenureHook is 21,907 B here (EIP-170 limit 24,576 B) since M4.2c moved its heavy pure math into the linked
+# external library TenureScorer. If it grows, move more pure math there first; lowering optimizer_runs saves
+# little (measured: 200 -> 100 ~430 B, 100 -> 30 only ~70 B more). Do not ship over the limit.

@@ -318,3 +318,31 @@ What I already measured (deploy profile, before FeesOwed/navOf removal, hook was
     silently.
   - Check `FOUNDRY_PROFILE=deploy forge build --sizes` after each step (a full via-IR build takes ~4 min).
 Then: M4.3 charts (CSV layouts are in the M4.2 handoff above), M4.4 demo script, M5.x hardening.
+
+## 2026-11-22T14:05Z — M4.2c Contract size headroom — DONE
+What: the hook's heaviest pure math moved into a new EXTERNAL (linked) library, src/libraries/TenureScorer.sol:
+scoreRebalance (immediate leakage + "moved" fraction), alphaWithFees, windowFees (fee estimate from raw
+accumulators), chargeLeak, applyMarkout, tickAt, tickDistance. All `external pure` thin wrappers over the existing
+internal libraries (which stay the single source of truth with their differential tests); all state and
+authorization stay in the hook. Deploy profile sizes: TenureHook 24,460 -> 21,907 B (2,669 B headroom),
+TenureScorer 6,302 B, CuratedVault 16,395 B (unchanged).
+Linking: forge links the library automatically for deployCodeTo/vm.getCode in tests and for forge script.
+New script/DeployTenureHook.s.sol (HookMiner CREATE2, asserts the mined address == deployed address) dry-runs
+in memory and was broadcast to a fresh anvil: hook deployed, runtime 21,907 B, owner() reads back.
+Files: src/libraries/TenureScorer.sol (new), src/TenureHook.sol, test/unit/TenureScorer.t.sol (new),
+script/DeployTenureHook.s.sol (new), snapshots/TenureHook.{default,deploy}.json, foundry.toml, CLAUDE.md, PLAN.md
+Tests: 12 added / 175 passing (default profile) and 175 passing under FOUNDRY_PROFILE=deploy. forge fmt OK.
+Scenario CSVs (headline, sweep, slow_bleed) regenerate byte-identical -> refactor is behavior-preserving.
+Decisions made:
+- Gas increase (external DELEGATECALLs + ABI encoding of structs), afterSwap overhead vs 0 due records:
+    one settlement   default 193,854 -> 205,734 (+11,880)   deploy 192,771 -> 202,553 (+9,782)
+    three            default 294,138 -> 333,434              deploy 290,762 -> 322,690
+  Both stay under the existing bounds (213,240 for one; 400,000 for three); no assertion was changed.
+  Headroom on the one-settlement bound is now ~7.5k (default) / ~10.7k (deploy): M5.4 should claw gas back
+  (struct packing, fewer external hops) before adding anything to afterSwap.
+- TenureScorer.test_hookSize_headroomUnderDeployProfile asserts size + 2,000 <= 24,576 when
+  FOUNDRY_PROFILE=deploy (the default, non-IR profile is test-only, ~28 KB, and only logs its size).
+- Scripts must not import v4-core PoolManager.sol (pins solc =0.8.26); use hookmate's V4PoolManagerDeployer.
+Notes for human: deploy the hook with FOUNDRY_PROFILE=deploy; forge script deploys TenureScorer automatically
+(one extra tx). To reuse one library across deployments pass
+`--libraries src/libraries/TenureScorer.sol:TenureScorer:<addr>`.
