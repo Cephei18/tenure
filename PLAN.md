@@ -124,19 +124,24 @@ as pure libraries with heavy tests, before any vault plumbing.
   keepers). Keep settle() permissionless, add settleMany(ids) for keepers. Try to reduce the fee-aware
   settlement cost raised in M3.3 (e.g. pack RebalanceRecord / BudgetState). _Accept:_ gas snapshot shows
   afterSwap overhead with 0 and 1 due records, and with auto-settle = 0; README explains the cost model.
-- [ ] **M4.5a Reactive settlement.** Install Reactive-Network/reactive-lib and reactive-test-lib (pin exact
-  commits). Build TenureSettlerRC (Reactive side): subscribes to RebalanceScored on the origin chain and to cron;
-  tracks pending records; when due, emits a Callback that calls TenureReactiveReceiver.settleMany(ids) on the
-  destination. Receiver validates callback proxy + RVM ID. Per-pool config: autoSettlePerSwap = 0 when Reactive
-  settles. Keep new hook bytecode minimal (receiver is a separate contract).
-  _Accept:_ reactive-test-lib tests: scored rebalance -> callback fires only after the window -> record settled;
-  unauthorized callback reverts; afterSwap gas with autoSettle=0 shows no settlement overhead.
-- [ ] **M4.5b Cross-chain freeze propagation.** TenureFreezeRC subscribes to tier-change events on chains A and B;
-  on FROZEN for curatorId on one chain, emits Callback to the freeze receiver on the other chain.
-  SAFETY INVARIANT: the receiver can only freeze/restrict, never unfreeze, restore, or raise budget; restore stays
-  with the local guardian. _Accept:_ tests prove the invariant (every non-freeze action via the receiver reverts),
-  freeze propagates A->B and B->A, duplicate/replayed callbacks are harmless, docs/THREAT_MODEL.md covers the
-  relay trust model.
+- [ ] **M4.5a Reactive settlement.** reactive-lib f6990ce and reactive-test-lib 2ff9b2a are pinned in lib/.
+  HUMAN DECISION: Reactive integration adds ZERO bytes to TenureHook. TenureReactiveReceiver (destination side,
+  separate contract, AbstractCallback) accepts callbacks only from the callback proxy with our RVM ID and calls the
+  existing permissionless hook.settleMany(id, ids). TenureSettlerRC (Reactive side, AbstractReactive) subscribes to
+  RebalanceScored, MarkoutSettled (prunes records settled any other way) and cron; tracks pending records; emits the
+  settleMany callback once records are due (delay in Reactive-chain blocks; the hook still enforces true due-ness).
+  Pools using Reactive set autoSettlePerSwap = 0.
+  _Accept:_ reactive-test-lib tests: scored rebalance -> no callback before the delay -> callback after it ->
+  record settled; unauthorized callbacks revert (wrong sender, wrong RVM ID); a failed callback is retried; a
+  test asserts TenureHook runtime size is unchanged (both profiles); docs/THREAT_MODEL.md covers the relay.
+- [ ] **M4.5b Cross-chain freeze propagation.** Lands in CuratedVault, NOT the hook: a relayed-freeze flag, set
+  only by the vault's authorized freeze receiver, blocks curator rebalance. TenureFreezeRC subscribes to TierChanged
+  for the same curator's pools on chains A and B; on FROZEN on one side it calls the freeze receiver on the other.
+  SAFETY INVARIANT: the relay path can only freeze; clearing the flag stays with the local guardian (hook guardian);
+  withdrawals stay open regardless. _Accept:_ tests prove the invariant (every non-freeze action via the receiver
+  reverts), freeze propagates A->B and B->A, duplicate/replayed callbacks are harmless, withdrawals work while
+  relay-frozen, TenureHook size unchanged; docs/THREAT_MODEL.md: relay trust model, replays, compromised relay
+  worst case (can only freeze an honest curator; no fund loss).
 - [H] Ask Reactive dev chat: best way to time a 50-block origin-chain window; confirm current callback proxy
   addresses; get Lasna testnet funds.
 

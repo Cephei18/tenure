@@ -99,4 +99,6 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   Before adding ANY hook code, move more pure math (e.g. RiskBudget.refill) into TenureScorer first.
 - vm.revertToState also reverts the TEST CONTRACT's storage: set loop params (seed, flags) AFTER reverting.
 - Windows: `python3` is not on PATH (Store alias); run `python -m pytest sim -q`.
+- Reactive libs pinned: reactive-lib f6990ce3526928d039fec78855b2004ff8d65c9f, reactive-test-lib 2ff9b2a68ca9956306ec943c10d1c757c1dd1956
+  (remapped reactive-lib/, reactive-test-lib/). Test sim: rvmId = test contract; proxy injects it as the callback's 1st arg.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->
