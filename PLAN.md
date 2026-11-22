@@ -124,7 +124,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   keepers). Keep settle() permissionless, add settleMany(ids) for keepers. Try to reduce the fee-aware
   settlement cost raised in M3.3 (e.g. pack RebalanceRecord / BudgetState). _Accept:_ gas snapshot shows
   afterSwap overhead with 0 and 1 due records, and with auto-settle = 0; README explains the cost model.
-- [ ] **M4.5a Reactive settlement.** reactive-lib f6990ce and reactive-test-lib 2ff9b2a are pinned in lib/.
+- [x] **M4.5a Reactive settlement.** reactive-lib f6990ce and reactive-test-lib 2ff9b2a are pinned in lib/.
   HUMAN DECISION: Reactive integration adds ZERO bytes to TenureHook. TenureReactiveReceiver (destination side,
   separate contract, AbstractCallback) accepts callbacks only from the callback proxy with our RVM ID and calls the
   existing permissionless hook.settleMany(id, ids). TenureSettlerRC (Reactive side, AbstractReactive) subscribes to

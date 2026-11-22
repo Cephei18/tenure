@@ -79,3 +79,21 @@ into a fair sqrtPriceX96 (`src/libraries/ChainlinkPriceLib.sol`, exact vs `sim/m
   feed far from the market stalls markouts rather than scoring them.
 Evidence: `test/ChainlinkReferencePrice.t.sol` (decimals 6/8/18, direct and two-feed modes, stale, negative and
 incomplete answers, set-once), `test/diff/ChainlinkPriceDiff.t.sol`.
+
+## 4. Reactive settlement relay (M4.5a)
+
+`TenureSettlerRC` runs on the Reactive Network. It watches the hook's `RebalanceScored`, `MarkoutSettled` and a
+cron topic, and asks `TenureReactiveReceiver` on the hook's chain to call `hook.settleMany`. The integration adds
+zero bytes to TenureHook; `test/HookSizeFrozen.t.sol` pins the hook size in both profiles.
+- **Trust model:** the relay is a liveness aid only. `settleMany` is permissionless, and the hook re-checks
+  everything: due-ness, oracle freshness, spot vs fair, already settled. The receiver accepts calls only from the
+  callback proxy (`authorizedSenderOnly`) carrying our RVM ID (`rvmIdOnly`). That stops strangers from spending the
+  receiver's pre-paid callback fees; it is not needed for correctness.
+- **Replayed or duplicate callbacks:** harmless. A settled record is skipped (`settleMany` returns 0 for it), and a
+  record that is not yet due is skipped. A callback that reverts (stale oracle, spot off fair) leaves the record
+  queued. The RC re-sends it at most once every `delayBlocks` until `MarkoutSettled` drops it.
+- **Compromised relay, worst case:** it can stop settling, or settle at a moment it picks. Stopping only delays
+  markouts: anyone (a keeper, a depositor) can still call `settle`/`settleMany`. `autoSettlePerSwap` is fixed at
+  registration, so the pool cannot fall back to swap-driven settlement on its own. Picking the moment is bounded by the hook's anti-gaming rule: settlement needs
+  a fresh oracle and spot within `maxSettleDev` of fair, the same as for any keeper. No funds can move: the
+  receiver can only call `settleMany`.

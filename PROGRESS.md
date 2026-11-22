@@ -474,3 +474,29 @@ Watch out:
   - Any test that wraps a call in vm.expectRevert must build its args first (bit me again in M4.6).
   - FOUNDRY_PROFILE=deploy builds take 4-10 min after a default build (shared cache); run them in background.
   - demo.sh uses a fixed 25M gas limit on purpose (gas estimation + curator try/catch silently reverted ticks).
+
+## 2026-11-22T18:06Z — M4.5a Reactive settlement — DONE
+What: keeper-free markout settlement via the Reactive Network, adding ZERO bytes to TenureHook (human decision).
+- Dependencies: the human's message said reactive-lib / reactive-test-lib were installed, but lib/ did not contain
+  them; the task itself says to install them pinned, so I ran forge install at the then-current upstream HEADs:
+  reactive-lib f6990ce3526928d039fec78855b2004ff8d65c9f, reactive-test-lib 2ff9b2a68ca9956306ec943c10d1c757c1dd1956
+  (commit 0d9a004; foundry.lock keys normalized to forward slashes; remappings reactive-lib/, reactive-test-lib/).
+- src/reactive/TenureReactiveReceiver.sol (AbstractCallback): settleMany(rvmId, poolId, ids), authorizedSenderOnly
+  (callback proxy) + rvmIdOnly (deployer = RC deployer), forwards to hook.settleMany. 1,209 B.
+- src/reactive/TenureSettlerRC.sol (AbstractReactive): subscribes to RebalanceScored + MarkoutSettled (topic1 =
+  poolId) and a cron topic; queues record ids due after delayBlocks; on cron sends up to 8 due ids in one callback
+  (gas 150k + 300k/record); re-sends an unsettled id at most once per delayBlocks; MarkoutSettled drops ids
+  settled by any path; ignores other pools/contracts/chains. 3,437 B.
+- test/HookSizeFrozen.t.sol pins the hook runtime size: default 29,180 B, deploy 22,528 B.
+Files: src/reactive/*, test/reactive/ReactiveSettlement.t.sol, test/HookSizeFrozen.t.sol, docs/THREAT_MODEL.md
+(section 4), PLAN.md
+Tests: 10 added / 209 passing in BOTH profiles (reactive-test-lib simulator for all Reactive tests). forge fmt OK.
+Deploy sizes: TenureHook 22,528 (unchanged), CuratedVault 16,433 (M5.4 struct change, untouched here).
+Decisions made:
+- Due-ness in the RC uses a delay in the blocks of the notifications it sees; cron blocks are Reactive-chain
+  blocks, so on a real deployment delayBlocks must be set conservatively (>= W origin blocks in Reactive-chain
+  time). Early is harmless (hook skips not-due ids); the [H] question to the Reactive dev chat still stands.
+- Cron topic is a constructor parameter (the test lib's cron topics are mock values; use the network's on Lasna).
+- The relay is a liveness aid only: no trust is needed for correctness (THREAT_MODEL section 4).
+Notes for human: please double-check the pinned commits are the versions you intended (lib/ was empty when this
+run started).
