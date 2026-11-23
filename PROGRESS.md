@@ -536,7 +536,7 @@ TenureHook bytecode is unchanged by both (pinned in test/HookSizeFrozen.t.sol: d
 Next: verify M4.5b under the deploy profile, then M5.1 invariants, M5.2 attack tests, M5.3 gas report, M6.x.
 Watch out: deploy-profile builds are memory-hungry on this machine; run them alone (close other heavy apps).
 
-## 2026-11-23 � M5.3 Gas report � DONE
+## 2026-11-23 — M5.3 Gas report — DONE
 What: test/GasReport.t.sol measures under isolation (each call its own tx): swaps (hookless baseline, Tenure nothing
 due, autoSettle=0 with records due, autoSettle=1 settling one), full CuratedVault rebalance vs the same moves on a
 hookless pool (PlainVault mirror), begin/endRebalance (gasleft() inside an instrumented ProbeVault on a second Tenure
@@ -554,3 +554,20 @@ Decisions made:
   (transient pending snapshot ~40-45k, record packing) recorded in GAS.md, NOT implemented (hook size headroom 48 B).
 Notes for human: the full suite under FOUNDRY_PROFILE=deploy was NOT run (memory; still pending from M4.5b) - only
 GasReport.t.sol was. Gas figures pin the current code; re-run the command in GAS.md after any hook change.
+
+## 2026-11-23 — Deploy-profile verification (closes M4.5b) + GAS.md follow-ups — DONE
+What:
+- FOUNDRY_PROFILE=deploy forge test (FULL suite): 229 passed, 0 failed (incl. FreezePropagation 9/9,
+  ReactiveSettlement 9/9, HookSizeFrozen). Nothing needed fixing. forge build --sizes (deploy): TenureHook 22,528 B
+  (2,048 B under EIP-170), CuratedVault 17,076 B, TenureScorer 6,302 B. M4.5b acceptance met -> marked [x].
+- GAS.md: "auto-settle off, records due" (113,808) < "auto-settle on, nothing due" (116,310) is NOT an artifact:
+  same setUp/pool state; the 2,502 gap is entirely inside afterSwap (10,931 vs 13,433): with auto=1 the hook must
+  cold-load the oldest record's blockNumber to see it is not due; with auto=0 it returns before touching records.
+  Added a same-state control (auto=0, nothing due = 113,808, asserted equal to records due) to GasReport.t.sol.
+- GAS.md "Cost in context": 537,900 gas/rebalance = $16.14 mainnet vs ~$0.016 on a 1s-block L2 (0.01 gwei assumed),
+  against ~3.5% of NAV saved per attack (RESULTS.md sweep); table for $100k/$1M/$10M vaults incl. yearly overhead
+  at 4 rebalances/day (mainnet $23.6k/yr: bad for small vaults, fine for large; L2 negligible).
+Files: docs/GAS.md, test/GasReport.t.sol, snapshots/GasReport.{default,deploy}.json, PLAN.md
+Tests: 229 passing under BOTH default and deploy profiles. fmt clean.
+Also fixed: one em dash in this file had been written as a cp1252 byte (0x97) by the M5.3 entry; now UTF-8.
+Notes for human: the L2 gas price (0.01 gwei) is an illustrative assumption; adjust to the target chain.
