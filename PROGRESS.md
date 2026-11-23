@@ -535,3 +535,22 @@ them at the start of this run, so they were installed per the plan), M4.5a (Reac
 TenureHook bytecode is unchanged by both (pinned in test/HookSizeFrozen.t.sol: default 29,180 / deploy 22,528).
 Next: verify M4.5b under the deploy profile, then M5.1 invariants, M5.2 attack tests, M5.3 gas report, M6.x.
 Watch out: deploy-profile builds are memory-hungry on this machine; run them alone (close other heavy apps).
+
+## 2026-11-23 — M5.3 Gas report — DONE
+What: test/GasReport.t.sol measures under isolation (each call its own tx): swaps (hookless baseline, Tenure nothing
+due, autoSettle=0 with records due, autoSettle=1 settling one), full CuratedVault rebalance vs the same moves on a
+hookless pool (PlainVault mirror), begin/endRebalance (gasleft() inside an instrumented ProbeVault on a second Tenure
+pool), settleMany 1/5, deposit, withdraw, deployment of TenureHook (CREATE2 at a mined flag address)/CuratedVault/
+TenureScorer. Snapshots: snapshots/GasReport.{default,deploy}.json. Table + method + USD (10 gwei, $3k): docs/GAS.md.
+Files: test/GasReport.t.sol, docs/GAS.md, snapshots/GasReport.default.json, snapshots/GasReport.deploy.json
+Tests: 11 added / 229 passing (default profile). GasReport.t.sol: 11/11 passing under FOUNDRY_PROFILE=deploy.
+Headline (deploy): swap +17,205 over hookless; rebalance 849,110 vs 311,210 without hook (overhead 537,900, ~$16);
+begin 175,042 / end 394,345; settleMany 1 = 184,507, 5 = 512,375; deposit 221,046; withdraw 174,970;
+deploy hook 4.99M, vault 4.22M, scorer 1.57M.
+Decisions made:
+- Measured the vault's 3rd rebalance (steady state); a first-ever re-range costs ~100k more once (fresh snapshot slots).
+- Verified snapshotGasLastCall includes intrinsic gas and applies refunds (probe test); documented in GAS.md.
+- Overhead is mostly by-design storage (13 fresh slots per rebalance: 8-slot record + fee snapshots). Optimizations
+  (transient pending snapshot ~40-45k, record packing) recorded in GAS.md, NOT implemented (hook size headroom 48 B).
+Notes for human: the full suite under FOUNDRY_PROFILE=deploy was NOT run (memory; still pending from M4.5b) - only
+GasReport.t.sol was. Gas figures pin the current code; re-run the command in GAS.md after any hook change.

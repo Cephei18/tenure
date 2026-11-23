@@ -1,0 +1,21 @@
+{
+  "beginRebalance": "176310",
+  "deploy_CuratedVault": "4722199",
+  "deploy_TenureHook": "6427984",
+  "deploy_TenureScorer": "1619220",
+  "deposit": "222436",
+  "endRebalance": "399867",
+  "rebalance_noHook": "312552",
+  "rebalance_probe": "868735",
+  "rebalance_probe_unlock": "291437",
+  "rebalance_tenure": "857692",
+  "rebalance_tenureOverhead": "545140",
+  "settleMany_1": "188550",
+  "settleMany_5": "529232",
+  "size_TenureHook": "29180",
+  "swap_noHook": "99981",
+  "swap_tenure_autoSettle0_recordsDue": "114852",
+  "swap_tenure_autoSettle1_nothingDue": "117469",
+  "swap_tenure_autoSettle1_settlesOne": "267322",
+  "withdraw": "176763"
+}

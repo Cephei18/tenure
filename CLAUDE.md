@@ -102,3 +102,6 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - Reactive libs pinned: reactive-lib f6990ce3526928d039fec78855b2004ff8d65c9f, reactive-test-lib 2ff9b2a68ca9956306ec943c10d1c757c1dd1956
   (remapped reactive-lib/, reactive-test-lib/). Test sim: rvmId = test contract; proxy injects it as the callback's 1st arg.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->
+- vm.snapshotGasLastCall = receipt-style gasUsed: INCLUDES 21k intrinsic + calldata, refunds APPLIED. gasleft() deltas are gross.
+- via-IR "stack too deep" in tests: a pure virtual constant override (e.g. autoSettle) re-inlines a big setUp per contract;
+  use a storage var set in the constructor and split setUp into helpers. Gas report: docs/GAS.md (M5.3).

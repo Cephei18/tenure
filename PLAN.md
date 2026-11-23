@@ -151,7 +151,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [ ] **M5.2 Attack tests on our own design.** Oracle staleness, oracle vs spot manipulation griefing an honest
   curator, window gaming, curator bypass attempts (direct PoolManager calls), reentrancy via hooks.
   Document each in docs/THREAT_MODEL.md with result.
-- [ ] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
+- [x] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
 
 ## M6 — Submission materials
 - [ ] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy
