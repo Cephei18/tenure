@@ -134,7 +134,7 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Accept:_ reactive-test-lib tests: scored rebalance -> no callback before the delay -> callback after it ->
   record settled; unauthorized callbacks revert (wrong sender, wrong RVM ID); a failed callback is retried; a
   test asserts TenureHook runtime size is unchanged (both profiles); docs/THREAT_MODEL.md covers the relay.
-- [ ] **M4.5b Cross-chain freeze propagation.** Lands in CuratedVault, NOT the hook: a relayed-freeze flag, set
+- [x] **M4.5b Cross-chain freeze propagation.** Lands in CuratedVault, NOT the hook: a relayed-freeze flag, set
   only by the vault's authorized freeze receiver, blocks curator rebalance. TenureFreezeRC subscribes to TierChanged
   for the same curator's pools on chains A and B; on FROZEN on one side it calls the freeze receiver on the other.
   SAFETY INVARIANT: the relay path can only freeze; clearing the flag stays with the local guardian (hook guardian);

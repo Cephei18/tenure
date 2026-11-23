@@ -454,12 +454,19 @@ contract GasReportAutoSettleOffTest is GasReportBase {
         autoSettle = 0;
     }
 
-    /// Record 0 is due but the swapper pays nothing for it.
+    /// Record 0 is due but the swapper pays nothing for it. Control: the SAME pool state with nothing due costs
+    /// exactly the same, because with auto-settle off afterSwap returns before it reads any record.
     function test_gas_swap_tenure_autoSettleOff_recordsDue() public {
+        uint256 clean = vm.snapshotState();
+        swapper.swapTo(key, true, SWAP_IN, TickMath.MIN_SQRT_PRICE + 1);
+        uint256 gNone = _snap("swap_tenure_autoSettle0_nothingDue");
+
+        vm.revertToState(clean);
         vm.roll(vm.getBlockNumber() + WINDOW);
         swapper.swapTo(key, true, SWAP_IN, TickMath.MIN_SQRT_PRICE + 1);
-        _snap("swap_tenure_autoSettle0_recordsDue");
+        uint256 gDue = _snap("swap_tenure_autoSettle0_recordsDue");
         assertFalse(hook.recordOf(poolId, 0).settled, "swap settled nothing");
+        assertEq(gDue, gNone, "due-ness is never read when auto-settle is off");
     }
 
     /// Keeper batch of 1 record (records alternate ranges, each with a swap).

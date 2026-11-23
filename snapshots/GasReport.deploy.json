@@ -14,6 +14,7 @@
   "settleMany_5": "512375",
   "size_TenureHook": "22528",
   "swap_noHook": "99105",
+  "swap_tenure_autoSettle0_nothingDue": "113808",
   "swap_tenure_autoSettle0_recordsDue": "113808",
   "swap_tenure_autoSettle1_nothingDue": "116310",
   "swap_tenure_autoSettle1_settlesOne": "262397",

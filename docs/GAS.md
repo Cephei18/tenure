@@ -19,7 +19,8 @@ Tenure is meant for a v4 deployment such as Unichain, where these execution cost
 | **Swaps** (1 token exact-in, inside the vault's range) | | | |
 | Plain swap, hookless pool (baseline) | 99,105 | $2.97 | v4 with no hook at all |
 | Swap on a Tenure pool, nothing due (`autoSettlePerSwap = 1`) | 116,310 | $3.49 | +17,205 vs. baseline (afterSwap callback + due check) |
-| Swap, `autoSettlePerSwap = 0`, records due | 113,808 | $3.41 | +14,703: swappers never pay for markouts |
+| Swap, `autoSettlePerSwap = 0`, nothing due (control) | 113,808 | $3.41 | +14,703: same pool state and block as the row below |
+| Swap, `autoSettlePerSwap = 0`, records due | 113,808 | $3.41 | identical: swappers never pay for markouts |
 | Swap, `autoSettlePerSwap = 1`, settles one due record | 262,397 | $7.87 | +146,087 vs. nothing due: one fee-aware markout, paid by that swapper |
 | **Rebalance** (remove old range, swap 1,000 token0, add new range) | | | |
 | Full vault rebalance with Tenure (`CuratedVault.rebalance`) | 849,110 | $25.47 | |
@@ -38,6 +39,21 @@ Tenure is meant for a v4 deployment such as Unichain, where these execution cost
 | `CuratedVault` | 4,215,108 | $126.45 | one per vault |
 | `TenureScorer` (linked external library) | 1,567,447 | $47.02 | deployed once, shared by every hook |
 | Total for one hook + one vault + library | 10,770,309 | $323.11 | one-time cost |
+
+### Why "auto-settle off, records due" is cheaper than "auto-settle on, nothing due"
+
+It is not a measurement artifact. Both rows start from the same pool state: the two test contracts share one
+`setUp`, so they have the same liquidity, the same vault position and the same records 0 and 1. The only difference
+is the per-pool `autoSettlePerSwap` setting. The whole 2,502 gas gap is inside `afterSwap` (10,931 vs 13,433 in the
+trace), and it comes from how far `_autoSettle` gets before returning:
+
+- **Off (`0`):** it reads the settle pointer, the record count and the pool's settings slot, then returns. It never
+  touches a record, so whether a record is due cannot matter. The control row shows this: the same pool state gives
+  113,808 with nothing due and 113,808 with records due (asserted equal in the test).
+- **On (`1`), nothing due:** it must also load the oldest unsettled record's `blockNumber` to learn that it is not
+  due yet. That is one more cold storage read (2,100 gas) plus the array-slot hashing.
+
+So the extra cost of auto-settle on a swap that settles nothing is one cold read of a record's block number.
 
 ## How the numbers were measured
 
@@ -79,9 +95,33 @@ Swappers pay almost nothing. The hook adds about 15-17k gas to a normal swap. Th
 settles a due markout (only on pools that opt into `autoSettlePerSwap = 1`). Pools that set it to 0 move all
 settlement cost to keepers (`settleMany`), and the cost per extra record falls to about 82k.
 
-Perspective: one rebalance costs about $16 of overhead at the illustrative mainnet price. That is less than one basis
-point on a vault above $200k, and a cent or so on an L2. Curators rebalance on the order of hours to days, not per
-block.
+## Cost in context
+
+Tenure's overhead is **537,900 gas per rebalance**. What that costs depends on the chain:
+
+- **Mainnet** (10 gwei, ETH $3,000): **$16.14** per rebalance.
+- **1-second-block L2** (Unichain-style, assuming about 0.01 gwei effective gas price): about **$0.016** per
+  rebalance, plus a small L1 data fee for a few hundred bytes of calldata.
+
+Compare that with what Tenure saved. In the 20-seed attack sweep (`docs/RESULTS.md`), Tenure kept about **3.5% of
+NAV per attack** for depositors (median 2,770 of 80,000 tokens) compared with static caps:
+
+| Vault NAV | Saved per attack (3.5%) | Rebalances that cost the same, mainnet | Same, 1s L2 | Overhead per year at 4 rebalances/day, mainnet | Same, 1s L2 |
+|---|---:|---:|---:|---:|---:|
+| $100k | $3,500 | 217 | ~217,000 | $23,560 (23.6% of NAV) | $24 (0.02%) |
+| $1M | $35,000 | 2,169 | ~2.2M | $23,560 (2.4%) | $24 (0.002%) |
+| $10M | $350,000 | 21,689 | ~21.7M | $23,560 (0.24%) | $24 (0.0002%) |
+
+How to read it:
+- **On a 1-second-block L2 the overhead is negligible at every vault size.** One prevented attack pays for hundreds
+  of thousands of measured rebalances.
+- **On mainnet it depends on size and rebalance frequency.** For a $10M vault one prevented attack covers about
+  15 years of rebalancing 4 times a day. For a $100k vault rebalancing that often, the overhead (about 24% of NAV per
+  year) is larger than the protection is worth. Small mainnet vaults should rebalance rarely, or run on an L2.
+  That is where Tenure is meant to be deployed.
+- The 3.5% comes from a single scenario: one attacker strategy, one pool depth, one budget setting (see the caveats
+  in RESULTS.md). It shows the order of magnitude and is not a guarantee. On a 1-second chain, the markout window
+  and refill rate are measured in blocks and need recalibrating; that changes behaviour, not gas.
 
 ## Optimization opportunities (not done; recorded for later)
 
