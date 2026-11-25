@@ -21,3 +21,4 @@ __pycache__/
 
 # Dry-run / rehearsal deployment outputs (real broadcasts write deployments/<chainId>.json)
 deployments/*.dryrun.json
+*.recovery.lock
