@@ -1,0 +1,86 @@
+{
+  "_readme": "Inputs for script/DeployUnichainSepolia.s.sol and script/DeployLasna.s.sol. Every external value has a 'source' (official docs only, read 2026-11-25). 'TODO' = not confirmed from an official source; see docs/DEPLOY.md. Public data only: no keys, no secrets.",
+  "deployer": {
+    "address": "0xD9df64Cb859206eECF3761ec4eb5057B579438A2",
+    "keystoreAccount": "tenure-burner",
+    "note": "Burner wallet (public address only). Must deploy BOTH the Unichain receivers and the Lasna RCs: the receivers accept callbacks only for the RVM id of their deployer (reactive-lib AbstractCallback: rvm_id = msg.sender)."
+  },
+  "unichainSepolia": {
+    "chainId": { "value": 1301, "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information" },
+    "rpc": { "value": "https://sepolia.unichain.org", "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information", "note": "Public, rate-limited, not for production." },
+    "blockTimeSeconds": { "value": 1, "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information" },
+    "explorer": { "value": "https://sepolia.uniscan.xyz", "source": "https://developers.uniswap.org/docs/unichain/tools/block-explorers" },
+    "explorerBlockscout": { "value": "https://unichain-sepolia.blockscout.com", "source": "https://developers.uniswap.org/docs/unichain/tools/block-explorers" },
+    "verification": { "value": "etherscan-v2", "source": "https://developers.uniswap.org/docs/unichain/guides/deploy-a-smart-contract", "note": "Docs: Etherscan API V2 keys work for Unichain Sepolia via forge --verify --etherscan-api-key. An explicit --verifier-url is not documented: TODO." },
+    "verifierUrl": { "value": "TODO", "source": "TODO" },
+    "poolManager": { "value": "0x00B036B58a818B1BC34d502D3fE730Db729e62AC", "source": "https://developers.uniswap.org/docs/protocols/v4/deployments" },
+    "positionManager": { "value": "0xf969Aee60879C54bAAed9F3eD26147Db216Fd664", "source": "https://developers.uniswap.org/docs/protocols/v4/deployments" },
+    "stateView": { "value": "0xc199F1072a74D4e905ABa1A84d9a45E2546B6222", "source": "https://developers.uniswap.org/docs/protocols/v4/deployments" },
+    "permit2": { "value": "0x000000000022D473030F116dDEE9F6B43aC78BA3", "source": "https://developers.uniswap.org/docs/protocols/v4/deployments" },
+    "reactiveCallbackProxy": { "value": "0x775c9B990ADe401060B78D0e98684eEf8d2466C1", "source": "https://dev.reactive.network/origins-and-destinations" },
+    "faucets": { "value": ["https://console.optimism.io/faucet", "https://faucet.quicknode.com/unichain/sepolia"], "source": "https://developers.uniswap.org/docs/unichain/tools/faucets" }
+  },
+  "ethereumSepolia": {
+    "chainId": { "value": 11155111, "source": "https://developers.uniswap.org/docs/unichain/getting-started/get-funds-on-unichain" },
+    "rpc": { "value": "TODO", "source": "TODO", "note": "No official Unichain/Reactive doc names a Sepolia RPC. Use any Sepolia RPC you trust; scripts take it as --rpc-url." },
+    "l1StandardBridgeProxy": { "value": "0xea58fcA6849d79EAd1f26608855c2D6407d54Ce2", "source": "https://developers.uniswap.org/docs/unichain/technical-information/contract-addresses", "note": "Send ETH to this address on Sepolia to bridge to Unichain Sepolia (get-funds page). Docs: addresses 'subject to change'." },
+    "bridgeUi": { "value": "https://superbridge.app/unichain-sepolia", "source": "https://developers.uniswap.org/docs/unichain/tools/bridges" },
+    "faucet": { "value": "TODO", "source": "TODO", "note": "No official Unichain or Reactive doc recommends a Sepolia ETH faucet." }
+  },
+  "lasna": {
+    "chainId": { "value": 5318007, "source": "https://dev.reactive.network/reactive-mainnet" },
+    "rpc": { "value": "https://lasna-rpc.rnk.dev/", "source": "https://dev.reactive.network/reactive-mainnet" },
+    "explorer": { "value": "https://lasna.reactscan.net", "source": "https://dev.reactive.network/reactive-mainnet" },
+    "systemContract": { "value": "0x8888888888888888888888888888888888888888", "source": "https://dev.reactive.network/reactive-mainnet" },
+    "cronEmitter": { "value": "0x0000000000000000000000000000000000fffFfF", "source": "https://dev.reactive.network/reactive-contracts", "note": "Legacy system contract; emits CRON events. The pinned reactive-lib also subscribes THROUGH this address (AbstractReactive.SERVICE_ADDR). Check with `cast code` before broadcasting (docs/DEPLOY.md)." },
+    "cronTopic": { "value": "0xb49937fb8970e19fd46d48f7e3fb00d659deac0347f79cd7cb542f0fc1503c70", "name": "Cron100", "source": "https://dev.reactive.network/reactive-contracts", "note": "Every cron event is a billed reactive tx: Cron100 (every 100 Lasna blocks) keeps the bill small." },
+    "faucet": {
+      "value": "0x9b9BB25f1A81078C544C829c5EB7822d747Cf434",
+      "chain": "ethereumSepolia",
+      "rate": "1 ETH -> 100 lREACT",
+      "maxPerTx": "5 ETH (excess is lost)",
+      "source": "https://dev.reactive.network/reactive-mainnet"
+    }
+  },
+  "chainlink": {
+    "available": { "value": true, "source": "https://docs.chain.link/changelog", "note": "2025-02-10: Data Feeds available on Unichain Sepolia." },
+    "ethUsd": { "value": "0xd9c93081210dFc33326B2af4C2c11848095E6a9a", "decimals": 8, "heartbeatSeconds": 86400, "source": "https://docs.chain.link/data-feeds/price-feeds/addresses?network=unichain", "note": "Read from the page's data file https://reference-data-directory.vercel.app/feeds-ethereum-testnet-sepolia-unichain-1.json" },
+    "usdcUsd": { "value": "0x25DdD2fEd0d51fe79d292Da47dd9f10AbdB4b3EC", "decimals": 8, "heartbeatSeconds": 86400, "source": "https://docs.chain.link/data-feeds/price-feeds/addresses?network=unichain", "note": "Same data file as ethUsd." },
+    "sequencerUptimeFeed": { "value": "TODO", "source": "TODO" }
+  },
+  "tenure": {
+    "mandateDelaySeconds": 86400,
+    "restoreDelayBlocks": 600,
+    "demoPool": {
+      "_doc": "Pool A: the scripted headline demo (script/demo_testnet.sh). MockReferencePrice is REQUIRED here: the demo's Market moves the fair price.",
+      "referencePrice": "mock",
+      "fee": 3000,
+      "tickSpacing": 60,
+      "thirdPartyLiquidity": "200000000000000000000000",
+      "depositEach": "40000000000000000000000",
+      "poisonAt": 20,
+      "window": 50,
+      "maxOracleAgeSeconds": 3600,
+      "maxSettleDev": 100,
+      "autoSettlePerSwap": 1
+    },
+    "chainlinkPool": {
+      "_doc": "Pool B: live Chainlink fair price (ETH/USD over USDC/USD) for mock tWETH (18 dec) / tUSDC (6 dec). Same curator contract as pool A, so a freeze on A is relayed to B. maxOracleAge must exceed the 86400 s feed heartbeat.",
+      "referencePrice": "chainlink",
+      "fee": 500,
+      "tickSpacing": 10,
+      "thirdPartyLiquidityWethUnits": "20000000000000000000",
+      "depositWeth": "2000000000000000000",
+      "window": 50,
+      "maxOracleAgeSeconds": 90000,
+      "maxSettleDev": 100,
+      "autoSettlePerSwap": 1
+    },
+    "receiverFundingWei": "2000000000000000",
+    "reactive": {
+      "settlerDelayBlocks": 60,
+      "settlerFundingWei": "5000000000000000000",
+      "freezeRcFundingWei": "2000000000000000000"
+    }
+  }
+}

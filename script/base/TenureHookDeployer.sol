@@ -15,15 +15,21 @@ abstract contract TenureHookDeployer is Script {
     uint160 internal constant HOOK_FLAGS =
         Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG;
 
-    /// @dev Must be called inside a broadcast: `new ... {salt}` goes through the CREATE2 factory.
+    /// @dev Must be called inside a broadcast. Calls the CREATE2 factory EXPLICITLY (calldata = salt ++ initcode)
+    ///      instead of relying on forge rewriting `new X{salt}` into a factory call: forge 1.8.5 skips that rewrite
+    ///      when the script runs against a forked live chain (M7.1: the hook landed at a script-derived address and
+    ///      reverted HookAddressNotValid), while an explicit call lands at the mined address in every mode.
     function _deployHook(IPoolManager pm, address owner, address guardian, uint256 mandateDelay, uint256 restoreDelay)
         internal
         returns (TenureHook hook)
     {
         bytes memory args = abi.encode(pm, owner, guardian, mandateDelay, restoreDelay);
+        bytes memory initCode = abi.encodePacked(type(TenureHook).creationCode, args);
         (address expected, bytes32 salt) =
             HookMiner.find(CREATE2_FACTORY, HOOK_FLAGS, type(TenureHook).creationCode, args);
-        hook = new TenureHook{salt: salt}(pm, owner, guardian, mandateDelay, restoreDelay);
-        require(address(hook) == expected, "hook address mismatch (library linking?)");
+        (bool ok, bytes memory ret) = CREATE2_FACTORY.call(abi.encodePacked(salt, initCode));
+        require(ok && ret.length == 20, "CREATE2 factory deployment failed");
+        hook = TenureHook(address(bytes20(ret)));
+        require(address(hook) == expected && address(hook).code.length != 0, "hook address mismatch");
     }
 }

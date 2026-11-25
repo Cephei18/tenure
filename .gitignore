@@ -18,3 +18,6 @@ node_modules/
 STOP
 __pycache__/
 .pytest_cache/
+
+# Dry-run / rehearsal deployment outputs (real broadcasts write deployments/<chainId>.json)
+deployments/*.dryrun.json
