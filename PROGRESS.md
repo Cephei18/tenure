@@ -648,3 +648,15 @@ What: root README rewritten: pitch, headline chart, 3 key numbers (20/20 FROZEN 
 -59%; ~2,770 tokens / 3.5% NAV kept), four layers, why-a-hook, sponsor integrations, GAS.md summary, threat model
 summary incl. window gaming (small, unprofitable gap) and alpha inflation, limitations, how to run.
 Files: README.md
+
+## Fix: demo_testnet.sh password handling (2026-11-25)
+- Exporting `ETH_PASSWORD` broke read-only `cast call` ("--keystore <PATH> required"): Foundry's
+  --password-file needs --keystore, not --account. The script now unsets ETH_PASSWORD and, if
+  PASSWORD_FILE is set, passes `--keystore $HOME/.foundry/keystores/$ACCOUNT --password-file $PASSWORD_FILE`
+  to `cast send` only (otherwise `--account`, prompting per tx). It fails fast if the keystore or PASSWORD_FILE is missing.
+- Tested: `bash -n`; the bug reproduced (cast call + ETH_PASSWORD); missing-keystore / missing-PASSWORD_FILE exits;
+  on an anvil fork of Unichain Sepolia (chain id 1301) with a throwaway keystore (anvil dev key #0, temp HOME)
+  and a stray ETH_PASSWORD: 3 real tick() txs signed via the password file. A cast shim logged every invocation:
+  calls carry only --rpc-url; sends carry --keystore/--password-file, or --account without PASSWORD_FILE (sends
+  stubbed). The final withdraw reverted on the fork, as expected: the test signer holds none of the deployer's shares.
+  The real burner keystore was not used. docs/DEPLOY.md "Run the demo" updated.

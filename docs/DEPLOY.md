@@ -49,7 +49,8 @@ doc names one).
      --sender 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --broadcast --slow
    ```
    This writes `deployments/5318007.json`.
-8. **Run the demo:** `bash script/demo_testnet.sh` (110 transactions; see "Run the demo" for the password).
+8. **Run the demo:** `bash script/demo_testnet.sh` (110 transactions; see "Run the demo" for `PASSWORD_FILE`, which avoids 111 password
+   prompts).
 9. **Record the addresses** from `deployments/1301.json` and `deployments/5318007.json` in the README.
 
 ## Funding estimate
@@ -124,13 +125,19 @@ https://lasna.reactscan.net (no verification flow is documented).
 bash script/demo_testnet.sh          # asks for confirmation, then sends 110 tick() txs + 1 withdraw
 ```
 
-`cast` asks for the keystore password on every transaction. To avoid 111 prompts, you can create a password file
-for this shell yourself and point `ETH_PASSWORD` at it (Foundry's `--password-file` env var). Delete it afterwards:
+Without extra settings, `cast send --account tenure-burner` asks for the keystore password on every transaction.
+To avoid 111 prompts, create a password file yourself and pass it as `PASSWORD_FILE`. Delete it afterwards:
 
 ```bash
 read -rs -p "keystore password: " P; printf '%s' "$P" > /tmp/kp; unset P; chmod 600 /tmp/kp
-ETH_PASSWORD=/tmp/kp bash script/demo_testnet.sh; rm -f /tmp/kp
+PASSWORD_FILE=/tmp/kp bash script/demo_testnet.sh; rm -f /tmp/kp
 ```
+
+With `PASSWORD_FILE` set, the script passes `--keystore ~/.foundry/keystores/tenure-burner --password-file
+"$PASSWORD_FILE"` to `cast send` only, because Foundry's `--password-file` requires `--keystore`, not `--account`.
+Read-only `cast call`s never get key or password flags. Do not export `ETH_PASSWORD`: it makes every `cast`
+command, including read-only `cast call`, fail with "--keystore <PATH> required". The script unsets it, and it
+exits with a clear message if the keystore file is missing.
 
 On a live chain the ticks land a few 1-second blocks apart, so the 50-block markout window spans fewer ticks than
 on anvil. The tick numbers differ from `docs/DEMO.md`, but the story is the same: poisoned at tick 20, then

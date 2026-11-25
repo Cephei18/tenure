@@ -4,10 +4,13 @@
 #
 #   bash script/demo_testnet.sh
 #
-# Env: RPC (default https://sepolia.unichain.org), ACCOUNT (Foundry keystore, default tenure-burner),
-#      TICKS (default 110), EVERY (status line every N ticks, default 10).
-#      Each tick is a transaction signed with the keystore: cast asks for the password every time, unless YOU set
-#      ETH_PASSWORD to a password FILE for this shell (see docs/DEPLOY.md). This script never reads keys.
+# Env: RPC (default https://sepolia.unichain.org), ACCOUNT (Foundry keystore name, default tenure-burner),
+#      TICKS (default 110), EVERY (status line every N ticks, default 10),
+#      PASSWORD_FILE (optional: a file holding the keystore password, created by YOU; see docs/DEPLOY.md).
+#      Each tick is a transaction signed with the keystore. Without PASSWORD_FILE, `cast send --account` asks for
+#      the password on every transaction. With it, ONLY `cast send` gets `--keystore <path> --password-file <file>`
+#      (Foundry's --password-file needs --keystore, not --account). Read-only `cast call`s never get key or password
+#      flags. This script never reads keys or the password itself.
 # Note: on a live chain ticks land a few blocks apart (1 s blocks), so the 50-block markout window spans fewer
 # ticks than on anvil and the tick numbers differ from docs/DEMO.md; the sequence of events is the same.
 set -euo pipefail
@@ -17,8 +20,19 @@ ACCOUNT="${ACCOUNT:-tenure-burner}"
 TICKS="${TICKS:-110}"
 EVERY="${EVERY:-10}"
 DEP="deployments/1301.json"
+KEYSTORE="$HOME/.foundry/keystores/$ACCOUNT"
+
+# An inherited ETH_PASSWORD makes every cast command (even read-only `cast call`) demand --keystore. Ignore it.
+unset ETH_PASSWORD
 
 cd "$(dirname "$0")/.."
+[ -f "$KEYSTORE" ] || { echo "keystore not found: $KEYSTORE (create it with: cast wallet import $ACCOUNT --interactive)"; exit 1; }
+if [ -n "${PASSWORD_FILE:-}" ]; then
+  [ -f "$PASSWORD_FILE" ] || { echo "PASSWORD_FILE is set but not a file: $PASSWORD_FILE"; exit 1; }
+  SIGNER=(--keystore "$KEYSTORE" --password-file "$PASSWORD_FILE")
+else
+  SIGNER=(--account "$ACCOUNT") # cast prompts for the password on each transaction
+fi
 [ "$(cast chain-id --rpc-url "$RPC")" = "1301" ] || { echo "not Unichain Sepolia (1301) - refusing"; exit 1; }
 [ -f "$DEP" ] || { echo "$DEP missing: run the DeployUnichainSepolia broadcast first"; exit 1; }
 
@@ -32,13 +46,14 @@ num() { cast call "$@" --rpc-url "$RPC" | awk '{print $1}'; }
 # Fixed gas limit: the curator's try/catch makes eth_estimateGas unreliable. Every receipt is checked.
 send() {
   local r
-  r=$(cast send "$@" --rpc-url "$RPC" --account "$ACCOUNT" --gas-limit 25000000 --json)
+  r=$(cast send "$@" --rpc-url "$RPC" "${SIGNER[@]}" --gas-limit 25000000 --json)
   echo "$r" | grep -q '"status":"0x1"' || { echo "transaction failed: $*"; echo "$r"; exit 1; }
 }
 
 done_ticks=$(num "$DIRECTOR" "ticks()(uint256)")
 echo "director $DIRECTOR | vault $VAULT | ticks already run: $done_ticks"
-echo "about to send $TICKS tick() transactions from $ME (account '$ACCOUNT') on Unichain Sepolia."
+echo "about to send $TICKS tick() transactions from $ME (keystore '$ACCOUNT') on Unichain Sepolia."
+[ -n "${PASSWORD_FILE:-}" ] && echo "signing with the password file (no prompts)" || echo "cast will ask for the keystore password on every transaction"
 read -r -p "continue? [y/N] " ok
 [ "$ok" = "y" ] || exit 0
 
