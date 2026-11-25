@@ -8,7 +8,10 @@
 #      ACCOUNT (Foundry keystore name, default tenure-burner), TICKS (default 110),
 #      EVERY (status line every N ticks, default 10),
 #      SENDER (address of that keystore, default the deployer from deployments/1301.json; used for nonce checks),
-#      PASSWORD_FILE (optional: a file holding the keystore password, created by YOU; see docs/DEPLOY.md).
+#      PASSWORD_FILE (optional: a file holding the keystore password, created by YOU; see docs/DEPLOY.md),
+#      GAS_LIMIT (per-transaction gas limit, default 3000000 = ~2x the max tick()/withdraw gas measured
+#      over a full 110-tick fork run; must be <= 16,777,216, the EIP-7825 per-transaction cap Unichain Sepolia
+#      enforces: a higher limit is rejected with "gas limit too high").
 #      Each tick is a transaction signed with the keystore. Without PASSWORD_FILE, `cast send --account` asks for
 #      the password on every transaction. With it, ONLY `cast send` gets `--keystore <path> --password-file <file>`
 #      (Foundry's --password-file needs --keystore, not --account). Read-only `cast call`s never get key or password
@@ -30,6 +33,16 @@ EVERY="${EVERY:-10}"
 DEP="deployments/1301.json"
 KEYSTORE="$HOME/.foundry/keystores/$ACCOUNT"
 RETRIES=3
+TX_GAS_CAP=16777216 # EIP-7825 (Osaka) per-transaction gas cap, 2^24; Unichain Sepolia rejects anything above it
+# Fixed gas limit (the curator's try/catch makes eth_estimateGas unreliable). Measured on a fork (2026-11-25):
+# max tick() 1,430,548, withdraw 118,752. The 2x margin matters: tick() catches a
+# failed curator call, so a too-tight limit could starve an inner call (63/64 rule) without reverting the tick.
+GAS_LIMIT="${GAS_LIMIT:-3000000}"
+die() { echo "ERROR: $*" >&2; exit 1; }
+[[ "$GAS_LIMIT" =~ ^[0-9]+$ ]] || die "GAS_LIMIT must be a number, got '$GAS_LIMIT'"
+[ "$GAS_LIMIT" -le "$TX_GAS_CAP" ] ||
+  die "GAS_LIMIT=$GAS_LIMIT exceeds the per-transaction gas cap $TX_GAS_CAP (EIP-7825); Unichain Sepolia would reject every tx with 'gas limit too high'"
+MAX_USED=0
 
 # An inherited ETH_PASSWORD makes every cast command (even read-only `cast call`) demand --keystore. Ignore it.
 unset ETH_PASSWORD
@@ -43,7 +56,6 @@ else
   SIGNER=(--account "$ACCOUNT") # cast prompts for the password on each transaction
 fi
 
-die() { echo "ERROR: $*" >&2; exit 1; }
 # Read-only call with retries (public RPCs time out now and then). No key or password flags, ever.
 ro() {
   local out i
@@ -82,6 +94,17 @@ status() {
   fi
 }
 
+# Every successful receipt: track the max gasUsed and warn when it gets within 2x of GAS_LIMIT (headroom shrinking).
+check_gas() {
+  local used
+  used=$(grep -oE '"gasUsed":"0x[0-9a-fA-F]+"' <<<"$1" | grep -oE '0x[0-9a-fA-F]+') || return 0
+  used=$((used))
+  ((used > MAX_USED)) && MAX_USED=$used
+  if ((used * 2 > GAS_LIMIT)); then
+    echo "   WARNING: this tx used $used gas, more than half of GAS_LIMIT=$GAS_LIMIT; raise GAS_LIMIT (max $TX_GAS_CAP)" >&2
+  fi
+}
+
 is_transient() { grep -qiE 'timed out|timeout|error sending request|connection (reset|refused|closed)|connect error|50[234]' <<<"$1"; }
 nonce_at() { ro nonce "$FROM" --block "$1" || die "cannot read the nonce of $FROM; NOT resending. Check the explorer, then re-run."; }
 
@@ -94,9 +117,12 @@ send() {
   while :; do
     if [ "$resend" = 1 ]; then
       rc=0
-      out=$(cast send "$@" --rpc-url "$RPC" "${SIGNER[@]}" --gas-limit 25000000 --json 2>&1) || rc=$?
+      out=$(cast send "$@" --rpc-url "$RPC" "${SIGNER[@]}" --gas-limit "$GAS_LIMIT" --json 2>&1) || rc=$?
       if [ "$rc" = 0 ]; then
-        grep -q '"status":"0x1"' <<<"$out" && return 0
+        if grep -q '"status":"0x1"' <<<"$out"; then
+          check_gas "$out"
+          return 0
+        fi
         echo "ERROR: transaction mined but REVERTED: cast send $*" >&2
         printf '%s\n' "$out" >&2
         exit 1
@@ -136,6 +162,7 @@ if upd=$(ro call "$ORACLE" "getSqrtPriceX96(bytes32)(uint160,uint256)" "$POOL" |
   now=$(ro block latest --field timestamp); then
   echo "demo fair price last published $((now - upd)) s ago (pool A max age 3600 s); every tick() republishes it first"
 fi
+echo "gas limit per tx: $GAS_LIMIT (cap $TX_GAS_CAP)"
 echo "about to send $TICKS tick() transactions from $FROM (keystore '$ACCOUNT') on Unichain Sepolia."
 [ -n "${PASSWORD_FILE:-}" ] && echo "signing with the password file (no prompts)" || echo "cast will ask for the keystore password on every transaction"
 read -r -p "continue? [y/N] " ok
@@ -161,4 +188,5 @@ send withdraw_landed "$VAULT" "withdraw(uint256,uint256,uint256,address)" "$shar
 echo "   redeemed all $shares shares (see the Withdraw event on the explorer)"
 echo
 echo "summary: poisoned at tick $(num "$DIRECTOR" "poisonAt()(uint256)") | FROZEN at tick $(num "$DIRECTOR" "frozenAt()(uint256)") | attack rounds: $(num "$DIRECTOR" "rounds()(uint256)")"
+echo "max gas used by any confirmed tx this run: $MAX_USED (limit $GAS_LIMIT)"
 echo "Explorer: https://sepolia.uniscan.xyz/address/$DIRECTOR"

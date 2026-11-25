@@ -684,3 +684,18 @@ Files: README.md
   The fork's tick count was 6, exactly the number of ticks intended. No call carried key/password flags. The final
   withdraw reverts on the fork because the test signer holds none of the deployer's shares; the script prints the
   receipt and exits 1.
+
+## Fix: per-transaction gas cap on Unichain Sepolia (2026-11-25)
+- The live demo failed: `--gas-limit 25000000` is rejected ("-32003: gas limit too high"), because Unichain Sepolia
+  enforces the EIP-7825 per-tx cap of 16,777,216. Plain anvil forks don't enforce it. anvil 1.8.5 does with
+  `--hardfork osaka --enable-tx-gas-limit`; the flag alone does nothing (a 25M tx still succeeded).
+- Measured on a fork, full run, deployer impersonated (no keys): max tick() gas 1,430,548 (an attack round just
+  before FROZEN); withdraw 118,752. GAS_LIMIT is now an env var, default 3,000,000 (~2x, rounded up). The script
+  refuses GAS_LIMIT > 16,777,216 or a non-number, warns if a tx uses > 50% of GAS_LIMIT, and prints the max gas used.
+- Validation on a capped fork (osaka + tx gas limit):
+  - 25,000,000 and 16,777,217 were rejected ("tx.gas_limit > resolved tx gas limit cap"); 16,777,216 was accepted.
+  - The script ran 3 ticks at the default 3M (throwaway keystore). Then 106 more ticks + the deployer's withdraw ran at 3M.
+  - All 110 tick receipts succeeded, max 1,430,548. The outcome matched the 25M baseline exactly: poisonAt 20,
+    frozenAt 80, 3 rounds, attacker profit 613.922350593430167887. So no inner call was starved.
+- Deploy scripts set no gas limit (forge estimates). The real broadcasts peaked at 6.9M sent / 5.0M used (1301) and
+  1.5M (Lasna), all under the cap. script/demo.sh keeps 25M: it is local-anvil only (no cap).

@@ -111,3 +111,5 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   (anvil/in-memory is fine): call CREATE2_FACTORY explicitly (script/base/TenureHookDeployer.sol).
 - Invariants: forge 1.8.5 reports all invariant_* of a contract as ONE grouped campaign ("invariants (runs: ...)").
 - Settling at an off-fair spot grades a curator better, never worse (THREAT_MODEL s8): spot choice = alpha inflation.
+- Unichain Sepolia enforces the EIP-7825 per-tx gas cap 16,777,216 ("-32003: gas limit too high"); anvil only with
+  `--hardfork osaka --enable-tx-gas-limit` (the flag alone does nothing). demo tick() max 1.43M gas -> GAS_LIMIT 3M.

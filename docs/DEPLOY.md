@@ -62,8 +62,8 @@ Gas from the dry runs (2026-11-25). Unichain Sepolia: 41.5M gas, max fee 0.001 g
 |---|---:|---|---:|
 | Unichain Sepolia | ~0.00004 ETH | deployment (41.5M gas) | |
 | | 0.004 ETH | pre-funding of the two callback receivers (`receiverFundingWei` x 2) | |
-| | <= 0.003 ETH | demo: 111 txs at a 25M gas limit (upper bound; real use is lower) | |
-| | **~0.007 ETH** | | **0.03 ETH** (absorbs a 10x gas spike) |
+| | <= 0.0004 ETH | demo: 111 txs at the 3M `GAS_LIMIT` (upper bound; measured use is at most 1.43M per tick) | |
+| | **~0.0045 ETH** | | **0.03 ETH** (absorbs a 10x gas spike) |
 | Lasna | 0.55 lREACT | deployment (2.76M gas at 200 gwei) | |
 | | 7 lREACT | pre-funding of the RCs (settler 5, freeze 2: `tenure.reactive.*FundingWei`) | |
 | | **~7.6 lREACT** | | **15 lREACT = 0.15 Sepolia ETH** to the faucet |
@@ -152,6 +152,17 @@ RPC="https://<your-provider-unichain-sepolia-url>" PASSWORD_FILE=/tmp/kp bash sc
 ```
 
 The script refuses any RPC whose chain id is not 1301.
+
+**Gas limit.** Every transaction is sent with a fixed `GAS_LIMIT`, default 3,000,000; `eth_estimateGas` is
+unreliable because `tick()` catches a failed curator call. Unichain Sepolia enforces the EIP-7825 per-transaction
+gas cap of 16,777,216 (2^24). Anything above it is rejected with "error code -32003: gas limit too high", and the
+script refuses to start with `GAS_LIMIT` above the cap. The default is about 2x the maximum measured on a local
+fork over a full 110-tick run plus the withdraw (2026-11-25): 1,430,548 gas for the heaviest tick (an attack
+round just before FROZEN) and 118,752 for the withdraw. The 2x margin matters because `tick()` swallows a failed
+inner call: a limit that is too tight could starve the curator's rebalance (63/64 rule) without reverting the
+tick, which would change the story. The script warns if any transaction uses more than half of `GAS_LIMIT`, and
+prints the maximum gas used at the end. To override it: `GAS_LIMIT=4000000 PASSWORD_FILE=/tmp/kp bash
+script/demo_testnet.sh`.
 
 **If a transaction fails.** The script prints cast's error and exits non-zero; nothing fails silently. On a
 timeout or connection error it does not resend blindly. It waits (3, 6, then 9 s), re-reads `ticks()` and the
