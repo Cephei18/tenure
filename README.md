@@ -131,6 +131,10 @@ On mainnet the overhead (~$16 per rebalance) fits vaults above about $1M. On a 1
 - Token callbacks (ERC777-style) are not supported. They cannot break the guards, but they can grade the curator
   adversely.
 - Testnet deployment is scripted and dry-run but not yet broadcast.
+- On the testnet deployment, freeze relays run one way only: from the demo vault A to vault B. Vault A is owned by
+  its `DemoDirector`, which can only enter safe mode, so A's freeze receiver cannot be re-pointed to the rebuilt
+  receiver. A FROZEN on A is relayed to B, but a FROZEN on B does not reach A. Both directions are covered in
+  tests (`test/reactive/FreezePropagation.t.sol`). See [`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md).
 
 ## How to run
 

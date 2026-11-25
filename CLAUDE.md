@@ -103,6 +103,9 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   bills; the proxy injects the REQUESTING RC (not the deployer) as callback arg 1. Legacy reactive-lib f6990ce
   (vmOnly, 0xfffFfF) is dead on Lasna: test-only (regression). Tests use test/reactive/utils/ReactiveNetworkSim.sol,
   NOT reactive-test-lib (it never bills, fakes VM mode). Fund via depositTo (reserves). docs/INCIDENT_REACTIVE.md.
+- ACCEPTED (2026-11-26): reactive-lib-omni 3ade0dcf added as a pinned dependency (human decision). Why: it is the
+  docs' current base; the pinned legacy lib cannot run on Lasna (react reverts "VM only", pay rejects 0x8888).
+- ACCEPTED: demo vault A cannot RECEIVE relayed freezes (director-owned; freezeReceiver not re-pointable). It still SENDS.
 - forge setUp: plain external calls from the test contract bump its nonce; predict CREATE addresses with only
   `new` in between.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->

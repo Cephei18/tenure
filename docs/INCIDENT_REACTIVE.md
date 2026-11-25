@@ -154,9 +154,56 @@ cast call 0x68d4571Fb9720d26353F643d0B4Bc56E044F442A "freezeReceiver()(address)"
 Subscription status is not served over the public Lasna RPC (`rnk_getSubscribers`: "method does not exist").
 Check it on https://lasna.reactscan.net (both RCs should show their subscriptions as ACTIVE).
 
-Top-ups later (debt is settled first, then reserves): `cast send $S "depositTo(address)" <rc> --value 0.5ether
---rpc-url $LASNA --account tenure-burner`. For a receiver: `cast send $P "depositTo(address)" <recv> --value
-0.002ether --rpc-url $UNI --account tenure-burner`.
+### Keep the settler funded
+
+The settler starts with 0.8 lREACT of reserves. It pays about 0.013 lREACT per Cron1000 tick (about 80 ticks a
+day), plus one reaction per `RebalanceScored` / `MarkoutSettled` of pool A. That is roughly 1 lREACT a day, so
+0.8 lREACT lasts under a day. Check it daily until the deadline.
+
+Check the remaining reserves and debt (read-only):
+
+```bash
+S=0x8888888888888888888888888888888888888888; LASNA=https://lasna-rpc.rnk.dev/
+SRC=$(python -c "import json;print(json.load(open('deployments/5318007.json'))['settlerRC'])")
+cast call $S "reserves(address)(uint256)" $SRC --rpc-url $LASNA | cast from-wei   # lREACT left
+cast call $S "debt(address)(uint256)" $SRC --rpc-url $LASNA                       # must be 0 (else INACTIVE)
+cast balance $D --ether --rpc-url $LASNA                                          # what you can deposit
+```
+
+Top it up (`depositTo` pays off any debt first, then adds the rest to the reserves; never send lREACT straight
+to the RC):
+
+```bash
+cast send $S "depositTo(address)" $SRC --value 1ether --rpc-url $LASNA --account tenure-burner
+cast call $S "reserves(address)(uint256)" $SRC --rpc-url $LASNA | cast from-wei   # confirm it rose
+```
+
+- **If the debt was not 0:** the deposit reactivates the settler. Ticks missed while it was INACTIVE are not
+  replayed, but nothing is lost: pending records go out on the next tick, and pool A's `afterSwap` auto-settlement
+  keeps working throughout.
+- **If your wallet is low:** the official faucet pays out on Lasna from Ethereum Sepolia (1 ETH = 100 lREACT;
+  docs/DEPLOY.md step 4).
+
+The freeze RC (0.3 lREACT) is billed only on `TierChanged` events of pools A and B, so it rarely needs a top-up.
+Use the same two commands with its address (`freezeRC` in deployments/5318007.json).
+
+Receivers, in ETH at the callback proxy: `cast send $P "depositTo(address)" <recv> --value 0.002ether --rpc-url
+$UNI --account tenure-burner`.
+
+## Known limitation: vault A cannot receive a relayed freeze
+
+The demo vault A is owned by its `DemoDirector`, which can only enter safe mode, so `setFreezeReceiver` cannot be
+called on it. After the repair, A keeps the old (dead) receiver:
+
+| Direction | Works? | Why |
+|---|---|---|
+| FROZEN on A -> relayed to B | yes | A's `TierChanged` comes from the hook; B points at the new freeze receiver |
+| FROZEN on B -> relayed to A | no | A's `freezeReceiver` is the legacy receiver, which rejects every current callback |
+
+The demo shows the A-to-B direction, so this is accepted (human decision, 2026-11-26). Both directions are tested
+(`test/reactive/FreezePropagation.t.sol`: `test_frozenOnA_blocksCuratorOnB_withdrawalsStayOpen`,
+`test_frozenOnB_blocksCuratorOnA`). A fresh deployment with the fixed `DeployUnichainSepolia` wires both vaults
+before ownership moves to the director, so it does not have this limitation.
 
 ## A fresh freeze to show the relay (5 Unichain txs, no hook change)
 
