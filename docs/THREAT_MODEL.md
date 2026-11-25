@@ -174,3 +174,84 @@ one round.)
 **Planned fix (M5.5, lifetime grading):** when the curator replaces a range, run a final markout from the original
 decision to now and charge only the loss beyond the early W-block grade. A max horizon lets anyone force the final
 grade.
+
+**Candidate fix found in M5.2 (untested, for M5.5):** value both hypothetical holdings at the FAIR price instead of
+the settlement spot (`S := P*` in the markout). The grade would then not depend on spot at all. It equals the
+realized outcome once spot returns to fair. When spot is off fair it is a lower bound for the curator (LP holdings
+at any off-fair spot, valued at fair, are worth at least the holdings at fair; see section 8). That would close
+both the escaped last leg above and the alpha inflation in section 8. It changes the math spec (tenure-math) and
+needs the Python model, new vectors and a hook-size check first.
+
+## 7. Invariants (M5.1)
+
+`test/invariant/TenureInvariants.t.sol`: a handler drives the whole system: deposits, withdrawals, random curator
+decisions (most break the mandate and are rejected), swaps up to 400 ticks off fair, fair-price moves, blocks
+with and without oracle refresh (so the oracle goes stale), settlements, safe mode, guardian restores, and a
+simulated full bank run. In-transaction properties are checked inside the handler call and latched into ghost
+flags, because forge clears transient storage between top-level calls.
+
+| Invariant | Meaning |
+|---|---|
+| `bankRunAlwaysSucceeds` | every holder exits in full, in sequence; only the burned dead shares remain |
+| `withdrawPaysAtMostProRata` | no withdrawal pays more than shares/supply of holdings (2 wei of v4 rounding slack) |
+| `noOrphanedVaultLiquidity` | the vault has liquidity only in the hook-tracked range, never in any other range it tried |
+| `budgetBounds` | budget <= bMax, bMax0 <= bMax <= bMaxCap, cap0 <= deposit cap <= capMax |
+| `frozenOnlyLiftedByGuardian` | FROZEN is left only through the guardian's timelocked restore |
+| `sessionNeverLeftOpen` | no hook session is open after any vault call (checked in the same transaction) |
+| `withdrawalsNeverBlocked` | no withdrawal reverts: not when FROZEN, not with a stale oracle, not at a manipulated spot |
+
+**Result:** all hold. One full-depth campaign ran 256 runs x 500 calls = 128,000 calls with 0 reverts and 0
+violations. The checked-in configuration uses depth 100 (about 2 minutes per profile).
+`test_invariantHandler_reachesKeyStates` proves the handler reaches FROZEN, a stale oracle, a guardian restore and
+a bank run, so the campaign is not passing vacuously.
+
+## 8. Oracle and oracle-vs-spot attacks (M5.2)
+
+`test/attacks/OracleAttacks.t.sol`:
+- **Stale oracle across a full markout cycle**: the curator cannot open a session, swaps keep working, a due record
+  is never scored at a stale price (afterSwap skips it; `settle`/`settleMany` revert `Tenure__StalePrice`), and it
+  settles normally once the price is fresh. An oracle timestamp in the future is rejected like a stale one.
+- **Griefing an honest curator at settlement is impossible.** An outsider can pick the settlement spot within
+  `maxSettleDev`. But positions are valued at the fair price, and an LP position at any off-fair spot is worth at
+  least as much at fair as the same position at fair: it sold above fair or bought below fair on the way. Measured:
+  an honest record settled at fair grades -2 wei, and the same record settled at -100 or +100 ticks grades
+  **+40.08 tokens**.
+- **The flip side (finding): alpha inflation.** An accomplice who pushes spot to the edge of the band before
+  settling hands the curator +40.08 tokens of positive alpha for 36.11 tokens of its own cost. That grew `bMax` by
+  12.5% (2.000e15 to 2.2505e15) and raised the deposit cap: reputation bought for slightly less than it adds.
+  It is bounded per record (under 0.1% of NAV, asserted) and capped overall by `bMaxCap`/`capMax`, but it is a
+  real way to buy reputation. The section 6 candidate fix (value at fair) removes it.
+- **Spot push vs a prudent curator**: a curator that refuses to act while spot is off fair can be delayed by a push
+  but never charged. The hook cannot tell a naive honest curator from a poisoned one: a curator that re-centers
+  on a manipulated spot is charged by the markout. By design, Tenure grades outcomes, not intent.
+
+## 9. Curator bypass attempts (M5.2)
+
+`test/attacks/BypassAttacks.t.sol`. All refused:
+- The curator (or anyone) calling the hook's session functions directly: `Tenure__NotVault` for all six.
+- Direct PoolManager calls on the vault's exact ticks: v4 keys positions by owner, so the rogue contract only
+  touches its own position. Adding is just third-party liquidity. Removing the vault's L underflows the rogue's
+  own position (`SafeCastOverflow`). Vault liquidity and NAV are unchanged.
+- Calling the vault's `unlockCallback` directly: `Tenure__NotPoolManager`. Calling hook callbacks directly:
+  `NotPoolManager`.
+- The curator changing its mandate, restoring itself, or replacing itself: owner- or guardian-only.
+- A FROZEN curator: `rebalance` reverts `Tenure__Frozen`. Only de-risking stays open: safe mode and withdrawals.
+
+## 10. Reentrancy (M5.2)
+
+Tenure's contracts make no untrusted external calls: the hook calls only the PoolManager and the owner-set oracle.
+The realistic vector is a token with transfer callbacks, which fires INSIDE a measured rebalance.
+`test/attacks/Reentrancy.t.sol` etches such a token over the pool's currency0 and re-enters from the callback
+while the session is open:
+- vault `deposit`, `withdraw`, nested `rebalance`, `enterSafeMode`: `ReentrancyGuardReentrantCall`.
+- hook `beginRebalance` (second session) and `endRebalance` (closing early, before H_after is measured):
+  `Tenure__NotVault`.
+- a nested `PoolManager.unlock`: `AlreadyUnlocked`.
+- The outer rebalance still completes, is scored, and leaves no session open.
+- **`settle` mid-session runs** (it is permissionless and has no session check). It can only hurt the curator:
+  the vault's range has just been removed and its ticks cleared, so the fee estimator falls back
+  curator-adversely. Measured: a record graded +108.32 tokens normally grades -2 wei when settled mid-session. Only
+  a callback token can reach it. Tenure does not support such tokens. Adding a session check to `settle` costs
+  hook bytes (headroom is 48 B), so it is left as is and documented here.
+- The hook's own `afterSwap` never settles while a session is open, so a curator cannot pick its grading moment
+  with a swap inside its own rebalance.
