@@ -571,3 +571,28 @@ Files: docs/GAS.md, test/GasReport.t.sol, snapshots/GasReport.{default,deploy}.j
 Tests: 229 passing under BOTH default and deploy profiles. fmt clean.
 Also fixed: one em dash in this file had been written as a cp1252 byte (0x97) by the M5.3 entry; now UTF-8.
 Notes for human: the L2 gas price (0.01 gwei) is an illustrative assumption; adjust to the target chain.
+
+## 2026-11-25 — M5.2 (part): markout window gaming — DONE (M5.2 itself stays open)
+What:
+- W audit: `PoolSettings.window` is per pool, set by the owner once in registerPool, no setter; the curator cannot
+  touch it. Neither a constant nor curator-changeable, so per the request no code change (it cannot change at all,
+  so there is nothing to timelock). src/ untouched; hook size unchanged.
+- test/attacks/WindowGaming.t.sol (new, first file of the M5.2 attack suite): same attack struck inside vs after W
+  from one snapshot. Push -90 (<= maxSettleDev): damage 8.56 tokens; charged 17.29 inside W vs 80,002 wei after W;
+  100% realized after grading. Push -400 + partial arb to -100: damage 445.99; charged 484.52 vs 461.73; 13.09
+  (2.9%) realized after grading. Grading at -400 reverts SpotOffFair(400,100). 20 repeated -90 rounds (swapless
+  park): vault -57.75 (~0.07% NAV), tier FULL, budget untouched; attacker -50.57 (fees exceed take in this pool).
+- docs/THREAT_MODEL.md section 6 records W ownership, the table, the limits (maxSettleDev binds; the mandate
+  distance rule does not bind this variant; the next rebalance ends exposure but never re-grades the escaped loss;
+  holding spot off fair for W blocks is unmodeled) and the planned fix.
+- PLAN.md: M5.2 progress note; Part 2 added as M5.5 Lifetime grading, gated on the [H] testnet deploy.
+Files: test/attacks/WindowGaming.t.sol, docs/THREAT_MODEL.md, PLAN.md, PROGRESS.md, CLAUDE.md
+Tests: 4 added / 233 passing (default). WindowGaming 4/4 under FOUNDRY_PROFILE=deploy. fmt clean.
+Decisions made:
+- Measured the escape as "damage realized after grading" and "charge inside W minus charge after W", not
+  "damage - charged": the curator-adverse fee rule makes the charge exceed the damage inside W.
+- The repeated test uses a test-local SwaplessPoisonedCurator: the stock PoisonedCurator's inventory-swap park is
+  charged as leakage in this thin pool and FROZEN after one round, which hides the window effect.
+Notes for human: the testnet deploy is not done (only anvil broadcasts), so M5.5 was NOT started. The
+  repeated-campaign attacker loss is specific to this pool (0.3% fee, 2e23 third-party L); say "grading gap", not
+  "profitable attack", in the pitch.

@@ -121,3 +121,56 @@ TenureHook: the flag lives in the vault, and the hook size is pinned by `test/Ho
   mode is still allowed), and no funds can move: the relay has no path to tokens, shares, the mandate or the
   budget. A malicious vault owner could point the vault at a hostile receiver, but that receiver can still only
   freeze.
+
+## 6. Markout window gaming (M5.2, partly open)
+
+**Who controls W.** The markout window is `PoolSettings.window`. It is per pool, set by the owner once in
+`registerPool`, and has no setter. The curator cannot change it, and neither can the owner after registration. A
+different W needs a new pool registration, which depositors can see coming. So it is not timelocked because it
+cannot change at all. (It is not part of `Mandate`; it is fixed like the oracle.)
+
+**Threat.** A markout grades a decision once, W blocks after it is made. A poisoned curator re-centers its range on
+a spot the attacker pushed off fair (the section 2 "follow" decision). The attacker then waits until the record has
+been graded before arbitraging spot back through that range. Loss realized after grading is never charged.
+
+**What bounds it.** A record can only be graded while `|spot - fair| <= maxSettleDev` (100 ticks in tests;
+`Tenure__SpotOffFair` otherwise). A range's value at a given spot does not depend on the path taken, so grading
+already counts everything up to the settlement spot. Only the last leg, from the settlement spot back to fair, can
+land after grading: at most `maxSettleDev` ticks.
+
+**Measured** (`test/attacks/WindowGaming.t.sol`; same pool and vault as section 2, every round run from the same
+snapshot, values in token units at the fair price):
+
+| Attack | Vault damage | Charged (inside W) | Charged (after W) | Realized after grading |
+|---|---|---|---|---|
+| Push -90 (inside maxSettleDev), grade at -90, then arb | 8.56 | 17.29 | 0.00 (80,002 wei) | 8.56 (100%) |
+| Push -400, arb to -100, grade, then finish the arb | 445.99 | 484.52 | 461.73 (-4.7%) | 13.09 (2.9%) |
+| Push -400, try to grade at -400 | - | - | reverts `SpotOffFair(400, 100)` | - |
+
+The charge inside W is above the damage because of the curator-adverse fee rule: the abandoned parked range's
+ticks are uninitialized, so the counterfactual is credited the global fee-growth upper bound.
+
+**Repeated (the slow bleed).** 20 rounds of the -90 attack struck after W
+(`test_windowGaming_smallPush_repeated`), with a poisoned curator that parks without a swap. The vault loses
+57.75 tokens (~0.07% of NAV), the tier stays FULL and the budget is never touched. This is a real grading gap.
+**In this pool the attacker loses 50.57 tokens on the campaign**, because the 0.3% fee on push and arbitrage through
+third-party liquidity is more than it takes from 90-tick moves. It is a griefing bleed here, not a profit. That
+would change with a lower fee tier or a vault that holds more of the in-range liquidity. (The stock section 2
+curator re-parks with an inventory swap; in this thin pool that swap is charged as leakage, and it is FROZEN after
+one round.)
+
+**What currently limits it, honestly:**
+- `maxSettleDev` is the binding limit. It caps the escaped leg. Lowering it shrinks the gap, but markouts then stall
+  more often in volatile markets.
+- **Mandate distance rule** (`maxCenterDist`): it does NOT bind this variant. A 90-tick follow is far inside 3,000.
+  It bounds how far a bad range can sit from fair, which bounds the size of a graded round, not the escaped leg.
+- **Next rebalance**: it ends the vault's exposure to the graded range, but it does NOT re-grade the escaped loss.
+  The next record measures `H_before` after the loss and compares against keeping the already-damaged range. In the
+  repeated test the 20 park records charge nothing.
+- **Holding spot off fair for W blocks** (not modeled): the tests have no other traders. In a live pool,
+  arbitrageurs pull spot back within W through the vault's range, and that loss is graded. The attacker must defend
+  the manipulated spot for W blocks, at its own cost.
+
+**Planned fix (M5.5, lifetime grading):** when the curator replaces a range, run a final markout from the original
+decision to now and charge only the loss beyond the early W-block grade. A max horizon lets anyone force the final
+grade.

@@ -151,7 +151,18 @@ as pure libraries with heavy tests, before any vault plumbing.
 - [ ] **M5.2 Attack tests on our own design.** Oracle staleness, oracle vs spot manipulation griefing an honest
   curator, window gaming, curator bypass attempts (direct PoolManager calls), reentrancy via hooks.
   Document each in docs/THREAT_MODEL.md with result.
+  _Progress:_ window gaming done (test/attacks/WindowGaming.t.sol, THREAT_MODEL.md section 6: W is per pool and
+  immutable after registration; up to maxSettleDev ticks of a round trip escape grading). Others still open.
 - [x] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
+- [ ] **M5.5 Lifetime grading.** START ONLY AFTER the [H] testnet deployment is done. When a record's new range is
+  replaced at the curator's next rebalance, run a final markout from the ORIGINAL decision (record time t) to now
+  and charge only the additional loss beyond the early W-block grade (never refund; a better lifetime result does
+  not undo the early charge). Add a max horizon after which a final grade can be forced: permissionless
+  (`finalize`-style call) and via the Reactive cron (TenureSettlerRC). Keep TenureHook within the 2,000 B headroom
+  guard (test_hookSize_headroomUnderDeployProfile); move math into TenureScorer first if needed. Python model +
+  vectors first (tenure-math). Re-measure gas (docs/GAS.md, both profiles). _Accept:_ re-run
+  test/attacks/WindowGaming.t.sol: the escaped damage (realized after grading) drops, shown next to the M5.2
+  numbers in THREAT_MODEL.md section 6; the repeated -90 campaign is charged; full suite green in both profiles.
 
 ## M6 — Submission materials
 - [ ] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy

@@ -105,3 +105,5 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - vm.snapshotGasLastCall = receipt-style gasUsed: INCLUDES 21k intrinsic + calldata, refunds APPLIED. gasleft() deltas are gross.
 - via-IR "stack too deep" in tests: a pure virtual constant override (e.g. autoSettle) re-inlines a big setUp per contract;
   use a storage var set in the constructor and split setUp into helpers. Gas report: docs/GAS.md (M5.3).
+- M5.2 window gaming: the charge exceeds the damage inside W (curator-adverse fee fallback for abandoned ranges), so
+  measure an escape as damage realized after grading and the inside-vs-after charge drop, never "damage - charged".
