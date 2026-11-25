@@ -107,3 +107,7 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   use a storage var set in the constructor and split setUp into helpers. Gas report: docs/GAS.md (M5.3).
 - M5.2 window gaming: the charge exceeds the damage inside W (curator-adverse fee fallback for abandoned ranges), so
   measure an escape as damage realized after grading and the inside-vs-after charge drop, never "damage - charged".
+- forge 1.8.5 does NOT route `new X{salt}` via the CREATE2 factory when a script runs against a FORKED live chain
+  (anvil/in-memory is fine): call CREATE2_FACTORY explicitly (script/base/TenureHookDeployer.sol).
+- Invariants: forge 1.8.5 reports all invariant_* of a contract as ONE grouped campaign ("invariants (runs: ...)").
+- Settling at an off-fair spot grades a curator better, never worse (THREAT_MODEL s8): spot choice = alpha inflation.

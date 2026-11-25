@@ -596,3 +596,55 @@ Decisions made:
 Notes for human: the testnet deploy is not done (only anvil broadcasts), so M5.5 was NOT started. The
   repeated-campaign attacker loss is specific to this pool (0.3% fee, 2e23 third-party L); say "grading gap", not
   "profitable attack", in the pitch.
+
+## 2026-11-25 — M5.1 Invariant tests + M5.2 Attack tests (rest) — DONE
+What:
+- test/invariant/TenureInvariants.t.sol: TenureHandler (deposit, withdraw, random curator decisions, swaps up to
+  400 ticks off fair, fair moves, blocks with/without oracle refresh, settleAll, safe mode, guardian restore,
+  simulated bank run). 7 invariants: bank run always succeeds, withdraw <= pro-rata (2 wei slack), no orphaned
+  vault liquidity, budget/bMax/deposit-cap bounds, FROZEN only lifted by guardian, no session left open, withdrawals
+  never blocked. In-tx properties latched in ghost flags. One full-depth campaign (256 x 500 = 128,000 calls)
+  passed with 0 reverts; checked-in depth 100 (inline forge-config). Smoke test proves the handler reaches FROZEN,
+  stale oracle, restore, bank run.
+- test/attacks/OracleAttacks.t.sol (4), BypassAttacks.t.sol (6), Reentrancy.t.sol (3; callback token etched over
+  currency0). Results in THREAT_MODEL.md sections 7-10.
+Findings:
+- Settling at an off-fair spot can only grade a curator BETTER (LP holdings at any spot, valued at fair, >= those at
+  fair): honest curators cannot be griefed; an accomplice can INFLATE alpha: +40.08 tokens for 36.11 cost, bMax
+  +12.5% (bounded < 0.1% NAV per record, capped by bMaxCap). Candidate fix (value hypothetical holdings at fair)
+  recorded for M5.5; it would also close the window-gaming leg.
+- settle() runs mid-session (no session check); reachable only via a callback token; strips the curator's fee
+  credit (+108.32 -> -2 wei), never helps it. Not fixed (48 B hook headroom), documented.
+Files: test/invariant/TenureInvariants.t.sol, test/attacks/{OracleAttacks,BypassAttacks,Reentrancy}.t.sol,
+docs/THREAT_MODEL.md, PLAN.md
+Tests: 248 passing (default). Deploy profile: see the M7.1 entry.
+
+## 2026-11-25 — M7.1 Testnet deploy scripts + runbook (no broadcast) — DONE
+What:
+- deployments/config.json: every value with an official source URL (research by a subagent from
+  developers.uniswap.org, dev.reactive.network, docs.chain.link); unconfirmed = TODO. EIP-55 checked.
+- script/DeployUnichainSepolia.s.sol (scorer linked, hook mined, pool A demo + DemoDirector with mock oracle, pool B
+  tWETH/tUSDC on live Chainlink ETH/USD / USDC/USD, both Reactive receivers funded, freeze receiver wired to both
+  vaults), script/DeployLasna.s.sol (TenureSettlerRC + TenureFreezeRC, deployer must equal the Unichain deployer:
+  RVM id), script/demo_testnet.sh. Real broadcasts write deployments/<chainId>.json; simulations write
+  *.dryrun.json (git-ignored). foundry.toml: read-write fs permission for ./deployments.
+- BUG FIXED: forge 1.8.5 does not route `new X{salt}` through the CREATE2 factory when the script runs against a
+  forked live chain (with or without --broadcast; --always-use-create-2-factory did not help). The hook landed at a
+  script-derived address -> HookAddressNotValid. The pre-existing DeployTenureHook.s.sol had the same bug (only
+  ever run on anvil/in-memory). TenureHookDeployer now calls the factory explicitly (salt ++ initcode).
+- Verified: live dry run Unichain Sepolia (41,524,085 gas, SIMULATION COMPLETE); live dry run Lasna stops at
+  OutOfFunds (burner has 0 lREACT: expected); anvil fork of 1301: full broadcast + 26 demo ticks, 0 failures; anvil
+  fork of Lasna: both RCs deployed, live system contract accepted 3 + 2 subscriptions; plain anvil: both scripts;
+  script/demo.sh still FROZEN after 3 rounds.
+- Read-only: burner balance 0 on Unichain Sepolia, Ethereum Sepolia and Lasna. Funding estimate in docs/DEPLOY.md:
+  0.03 ETH Unichain, 15 lREACT, 0.25 Sepolia ETH total.
+Files: deployments/config.json, script/{DeployUnichainSepolia,DeployLasna}.s.sol, script/demo_testnet.sh,
+script/base/TenureHookDeployer.sol, docs/DEPLOY.md, foundry.toml, .gitignore
+Notes for human: follow the "Human checklist" at the top of docs/DEPLOY.md. Open items: verifier URL, Sepolia
+faucet/RPC, Reactive per-tx billing and RC top-up, sequencer feed (unused).
+
+## 2026-11-25 — M6.1 README — DONE
+What: root README rewritten: pitch, headline chart, 3 key numbers (20/20 FROZEN in 60-76 blocks; attacker profit
+-59%; ~2,770 tokens / 3.5% NAV kept), four layers, why-a-hook, sponsor integrations, GAS.md summary, threat model
+summary incl. window gaming (small, unprofitable gap) and alpha inflation, limitations, how to run.
+Files: README.md

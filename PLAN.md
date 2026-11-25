@@ -146,9 +146,9 @@ as pure libraries with heavy tests, before any vault plumbing.
   addresses; get Lasna testnet funds.
 
 ## M5 — Hardening (judges probe these)
-- [ ] **M5.1 Invariant tests.** Handler-based invariants: vault solvency (shares * NAV <= holdings), budget bounds,
+- [x] **M5.1 Invariant tests.** Handler-based invariants: vault solvency (shares * NAV <= holdings), budget bounds,
   session never open at end of tx, withdrawals never blocked.
-- [ ] **M5.2 Attack tests on our own design.** Oracle staleness, oracle vs spot manipulation griefing an honest
+- [x] **M5.2 Attack tests on our own design.** Oracle staleness, oracle vs spot manipulation griefing an honest
   curator, window gaming, curator bypass attempts (direct PoolManager calls), reentrancy via hooks.
   Document each in docs/THREAT_MODEL.md with result.
   _Progress:_ window gaming done (test/attacks/WindowGaming.t.sol, THREAT_MODEL.md section 6: W is per pool and
@@ -163,9 +163,19 @@ as pure libraries with heavy tests, before any vault plumbing.
   vectors first (tenure-math). Re-measure gas (docs/GAS.md, both profiles). _Accept:_ re-run
   test/attacks/WindowGaming.t.sol: the escaped damage (realized after grading) drops, shown next to the M5.2
   numbers in THREAT_MODEL.md section 6; the repeated -90 campaign is charged; full suite green in both profiles.
+  Candidate approach found in M5.2 (THREAT_MODEL.md section 6/8): value both hypothetical holdings at the FAIR
+  price instead of the settlement spot; that alone may close the escaped leg AND the alpha inflation. Evaluate it
+  first (Python model + vectors), then decide whether lifetime grading is still needed.
+
+## M7 — Testnet
+- [x] **M7.1 Testnet deploy scripts + runbook (no broadcast).** deployments/config.json (official-source URL per
+  value, unconfirmed = TODO), script/DeployUnichainSepolia.s.sol (scorer linked, hook mined, demo pool + director,
+  Chainlink pool, Reactive receivers), script/DeployLasna.s.sol (settler + freeze RCs), script/demo_testnet.sh.
+  _Accept:_ both scripts dry-run without --broadcast (live-chain simulation) and run on a local anvil; read-only
+  balance check of the burner; funding estimate with margin; docs/DEPLOY.md with a "Human checklist" first.
 
 ## M6 — Submission materials
-- [ ] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy
+- [x] **M6.1 README.md.** Problem (with sources), solution layers, why-a-hook, theme mapping (mandate = curator strategy
   params; AI curator = off-chain signals/ML; reputation-weighted AUM = budget-driven deposit cap), math summary,
   architecture mermaid diagram, results charts, threat model summary, limitations, how to run.
   Document FOUNDRY_PROFILE=deploy for anvil/testnet deploys and the contract-size reason.
