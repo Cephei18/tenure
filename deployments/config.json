@@ -7,7 +7,7 @@
   },
   "unichainSepolia": {
     "chainId": { "value": 1301, "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information" },
-    "rpc": { "value": "https://sepolia.unichain.org", "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information", "note": "Public, rate-limited, not for production." },
+    "rpc": { "value": "https://sepolia.unichain.org", "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information", "note": "Public, rate-limited, not for production. The only keyless Sepolia RPC in the official docs. Alternatives: providers on https://developers.uniswap.org/docs/unichain/tools/node-providers (no endpoint URLs given; most need an API key)." },
     "blockTimeSeconds": { "value": 1, "source": "https://developers.uniswap.org/docs/unichain/technical-information/network-information" },
     "explorer": { "value": "https://sepolia.uniscan.xyz", "source": "https://developers.uniswap.org/docs/unichain/tools/block-explorers" },
     "explorerBlockscout": { "value": "https://unichain-sepolia.blockscout.com", "source": "https://developers.uniswap.org/docs/unichain/tools/block-explorers" },

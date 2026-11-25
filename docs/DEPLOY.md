@@ -50,7 +50,7 @@ doc names one).
    ```
    This writes `deployments/5318007.json`.
 8. **Run the demo:** `bash script/demo_testnet.sh` (110 transactions; see "Run the demo" for `PASSWORD_FILE`, which avoids 111 password
-   prompts).
+   prompts, and for `RPC`, to switch endpoints if the public one times out).
 9. **Record the addresses** from `deployments/1301.json` and `deployments/5318007.json` in the README.
 
 ## Funding estimate
@@ -138,6 +138,37 @@ With `PASSWORD_FILE` set, the script passes `--keystore ~/.foundry/keystores/ten
 Read-only `cast call`s never get key or password flags. Do not export `ETH_PASSWORD`: it makes every `cast`
 command, including read-only `cast call`, fail with "--keystore <PATH> required". The script unsets it, and it
 exits with a clear message if the keystore file is missing.
+
+**RPC.** The script uses `RPC`, which defaults to `https://sepolia.unichain.org`. That is the only keyless Unichain
+Sepolia endpoint in the official docs
+(https://developers.uniswap.org/docs/unichain/technical-information/network-information, marked "Not for
+production use"). It is rate-limited and sometimes times out. The official Node Providers page
+(https://developers.uniswap.org/docs/unichain/tools/node-providers) lists providers with Unichain Sepolia
+support: Alchemy, Blockdaemon, Chainstack, dRPC, Dwellir, Infura, QuickNode and OnFinality. It gives no endpoint
+URLs, and most of these need a free account or API key. To use one, set its Unichain Sepolia URL:
+
+```bash
+RPC="https://<your-provider-unichain-sepolia-url>" PASSWORD_FILE=/tmp/kp bash script/demo_testnet.sh
+```
+
+The script refuses any RPC whose chain id is not 1301.
+
+**If a transaction fails.** The script prints cast's error and exits non-zero; nothing fails silently. On a
+timeout or connection error it does not resend blindly. It waits (3, 6, then 9 s), re-reads `ticks()` and the
+sender's nonce, and then does one of three things:
+- the tick landed: it carries on;
+- the transaction is still pending: it waits;
+- the transaction neither landed nor is pending: it resends, up to 3 retries.
+
+Any other error (for example insufficient funds) or a reverted receipt stops the script at once. Re-running is
+safe: the director continues from its current `ticks()`. The nonce check uses the deployer address from
+`deployments/1301.json`. If your keystore holds a different address, set `SENDER=<that address>`.
+
+**Stale fair price.** The demo pool's mock oracle is only updated by `tick()`, so after any pause longer than 1 h
+it is stale. This does not block the demo: `tick()` publishes a fresh price (`Market.step` → `setPrice`, stamped
+with the current block time) before any swap, settlement or rebalance reads it. Only the read-only `status()`
+view reverts with `Tenure__StalePrice` until then. The script shows that as "status unavailable: the demo fair
+price is stale", and also prints the price's age before the first tick.
 
 On a live chain the ticks land a few 1-second blocks apart, so the 50-block markout window spans fewer ticks than
 on anvil. The tick numbers differ from `docs/DEMO.md`, but the story is the same: poisoned at tick 20, then

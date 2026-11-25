@@ -660,3 +660,27 @@ Files: README.md
   calls carry only --rpc-url; sends carry --keystore/--password-file, or --account without PASSWORD_FILE (sends
   stubbed). The final withdraw reverted on the fork, as expected: the test signer holds none of the deployer's shares.
   The real burner keystore was not used. docs/DEPLOY.md "Run the demo" updated.
+
+## Fix: live demo failure on Unichain Sepolia (2026-11-25)
+- Cause 1: `status()` reverted Tenure__StalePrice, because the demo mock oracle had not been updated since deploy.
+  tick() itself is NOT blocked: Market.step() publishes a fresh price (setPrice at block.timestamp) before any
+  swap, settlement or rebalance reads it. So no refresh tx was added and no contract changed. The script now
+  shows the stale status as "status unavailable" and prints the oracle's age.
+- Cause 2: `cast send` timed out, and `r=$(...)` under `set -e` exited silently. The script now prints cast's error and
+  exits non-zero. On timeout/connection errors it re-reads ticks() and the sender's nonce (latest and pending) and
+  resends only if the tx neither landed nor is pending (max 3 retries, backoff 3/6/9 s). Read-only calls retry 3x.
+  RPC is configurable. The official docs name only https://sepolia.unichain.org as a keyless Sepolia RPC. The Node
+  Providers page lists providers but no URLs, so docs/DEPLOY.md documents that.
+- Tested: `bash -n`. On an anvil fork of Unichain Sepolia (chain 1301), warped +7200 s, the oracle was 12,264 s old and
+  status() reverted StalePrice. The setup used a throwaway keystore (anvil dev key #0, temp HOME), PASSWORD_FILE,
+  a stray ETH_PASSWORD, and a fault-injecting cast shim. Results:
+  - normal run: 3 ticks from a stale oracle;
+  - send failure, tx never sent: resent once, landed;
+  - timeout but tx landed: not resent;
+  - timeout with tx pending (automine off, mined 5 s later): waited, not resent;
+  - hard error (insufficient funds): printed, exit 1, no retry;
+  - always timeout: 3 retries, then exit 1;
+  - unreachable RPC: clear error, exit 1.
+  The fork's tick count was 6, exactly the number of ticks intended. No call carried key/password flags. The final
+  withdraw reverts on the fork because the test signer holds none of the deployer's shares; the script prints the
+  receipt and exits 1.
