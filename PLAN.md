@@ -154,7 +154,11 @@ as pure libraries with heavy tests, before any vault plumbing.
   _Progress:_ window gaming done (test/attacks/WindowGaming.t.sol, THREAT_MODEL.md section 6: W is per pool and
   immutable after registration; up to maxSettleDev ticks of a round trip escape grading). Others still open.
 - [x] **M5.3 Gas report.** `forge snapshot`; note costs of begin/end/settle/afterSwap in docs.
-- [ ] **M5.5 Lifetime grading.** START ONLY AFTER the [H] testnet deployment is done. When a record's new range is
+- [ ] **M5.5 Lifetime grading.** START ONLY AFTER the [H] testnet deployment is done.
+  FIRST ITEM: fair-price markout valuation (candidate fix from M5.2, THREAT_MODEL.md sections 6 and 8, MATH.md
+  pump-bound scope): value both hypothetical holdings at the FAIR price instead of the settlement spot. That alone
+  may close the window-gaming escaped leg AND reputation pumping via settlement spot. Evaluate it first (Python
+  model + vectors), then decide whether the lifetime grading below is still needed. When a record's new range is
   replaced at the curator's next rebalance, run a final markout from the ORIGINAL decision (record time t) to now
   and charge only the additional loss beyond the early W-block grade (never refund; a better lifetime result does
   not undo the early charge). Add a max horizon after which a final grade can be forced: permissionless
@@ -163,9 +167,6 @@ as pure libraries with heavy tests, before any vault plumbing.
   vectors first (tenure-math). Re-measure gas (docs/GAS.md, both profiles). _Accept:_ re-run
   test/attacks/WindowGaming.t.sol: the escaped damage (realized after grading) drops, shown next to the M5.2
   numbers in THREAT_MODEL.md section 6; the repeated -90 campaign is charged; full suite green in both profiles.
-  Candidate approach found in M5.2 (THREAT_MODEL.md section 6/8): value both hypothetical holdings at the FAIR
-  price instead of the settlement spot; that alone may close the escaped leg AND the alpha inflation. Evaluate it
-  first (Python model + vectors), then decide whether lifetime grading is still needed.
 
 ## M7 — Testnet
 - [x] **M7.1 Testnet deploy scripts + runbook (no broadcast).** deployments/config.json (official-source URL per

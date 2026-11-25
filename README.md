@@ -79,7 +79,9 @@ flowchart LR
 
 - **Chainlink is the fair price.** `ChainlinkReferencePrice` turns token/USD feeds (or a direct feed) into the
   fair `sqrtPriceX96` that every score uses. Stale, incomplete or non-positive answers revert. Feeds are set once
-  per pool. ([`src/ChainlinkReferencePrice.sol`](src/ChainlinkReferencePrice.sol))
+  per pool. ([`src/ChainlinkReferencePrice.sol`](src/ChainlinkReferencePrice.sol)) On Unichain Sepolia the feeds
+  update only about every 24 h, so the testnet pool uses a 25 h maximum oracle age. Mainnet feeds update far more
+  often, so a mainnet pool would use a much shorter maximum age.
 - **Reactive Network makes settlement keeper-free and propagates freezes across vaults.** `TenureSettlerRC` watches
   `RebalanceScored` plus a CRON topic and calls `settleMany` through a callback receiver. `TenureFreezeRC` relays a
   FROZEN tier on one vault to the same curator's vault elsewhere. The relay can only freeze, never unfreeze or move
@@ -106,8 +108,13 @@ On mainnet the overhead (~$16 per rebalance) fits vaults above about $1M. On a 1
   leg escapes: 2.9% of the damage for a 400-tick attack, and all of a tiny 90-tick one. Over 20 repeated rounds the
   vault lost 0.07% of NAV while the attacker lost money on fees. A fix (lifetime grading, value at fair) is
   planned as M5.5.
-- **Alpha inflation:** an accomplice can settle at the edge of the spot band to add positive alpha (reputation),
-  bounded under 0.1% of NAV per record and paid for at about cost. Same planned fix.
+- **Reputation pumping (faking a track record):** not ruled out, but bounded and capped. An accomplice who settles
+  a record at the edge of the spot band gets it graded higher. The gap is bounded per record (under 0.1% of NAV,
+  set by `maxSettleDev`) and capped overall (`bMaxCap`, `capMax`). THREAT_MODEL.md section 8 documents a small
+  measured gap: +40 alpha for 36 cost. The `k <= 1` rule ([`docs/MATH.md`](docs/MATH.md)) guarantees that
+  reputation bought with value really paid into the vault buys at most that much extra loss allowance. It does not
+  cover alpha that is recorded but not kept, which is this gap. Candidate fix: value the markout at the fair price,
+  the first item of M5.5.
 - **Oracle:** stale or future-dated prices block sessions and settlements but never swaps or withdrawals. An honest
   curator cannot be graded down by spot manipulation at settlement.
 - **Bypass and reentrancy:** direct PoolManager calls touch only the caller's own position. Every hook and vault

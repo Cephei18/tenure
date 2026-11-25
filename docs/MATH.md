@@ -38,9 +38,22 @@ budget' - budget  =  rho * (bMax' - bMax)   (up to a floor)
 ```
 
 So the extra loss the curator may cause before reaching FROZEN is at most `g` (that is, at most `X` in value),
-and the attacker paid exactly `X` to get it. Net extractable value never increases. Two effects make it strictly
-worse for the attacker: losses first reduce `cumAlphaWad`, so bleeding shrinks `bMax` back toward its old value
-while the budget is drained; and every rounding step (`floor` scaling, `ceil` loss) is curator-adverse.
+and the attacker paid exactly `X` to get it. **Under this premise** (the manufactured alpha is value actually paid
+into the vault and kept there), net extractable value does not increase. Two effects make it strictly worse for
+the attacker: losses first reduce `cumAlphaWad`, so bleeding shrinks `bMax` back toward its old value while the
+budget is drained; and every rounding step (`floor` scaling, `ceil` loss) is curator-adverse.
+
+**Scope: the bound does not cover alpha that is recorded but not kept.** M5.2 found such a case
+(`docs/THREAT_MODEL.md` section 8). An accomplice pushes pool spot to the edge of the settlement band
+(`maxSettleDev`) and settles there. The markout values the positions at that spot, so it records positive alpha.
+The value behind it goes back out when spot returns to fair, and the accomplice's cost goes mostly to
+third-party LPs as fees, not to the vault. Measured: +40.08 tokens of alpha for 36.11 tokens of cost, bMax +12.5%.
+So the premise above does not hold and faking a track record is not ruled out. It is bounded instead:
+- per record, by `maxSettleDev` (asserted under 0.1% of NAV in the test);
+- overall, by `bMaxCap` and `capMax`.
+
+The candidate fix, valuing the markout's hypothetical holdings at the fair price instead of at spot, is the first
+item of M5.5. It would make every recorded alpha a value the vault keeps, which restores the premise.
 
 With `k > 1` the inequality breaks: paying `X` buys up to `k * X` of loss allowance, and pumping is profitable.
 `RiskBudget.validate` (called by `TenureHook.registerPool`) therefore reverts with
@@ -50,6 +63,9 @@ The deposit cap also grows with `cumAlphaValue` (`m * X`), but deposit cap is no
 priced at NAV at the fair price, and every loss on them is still charged to the same budget.
 
 ### Evidence in tests
+These prove the budget-side bound (extra loss allowance <= `g`) for a given `g`; they do not cover how `g` is
+produced. The settlement-spot gap above is measured in
+`test/attacks/OracleAttacks.t.sol::test_settlementSpot_cannotGriefDown_canInflateUp`.
 - `test/unit/RiskBudget.t.sol::testFuzz_pumpNeverProfitable`: for random `k <= 1`, prior reputation, prior loss
   and pump size, the exact largest loss that leaves the curator un-frozen (binary search) grows by at most `g`.
   The same test fails for `k` in `[2e18, 3e18]` (mutation-checked).
