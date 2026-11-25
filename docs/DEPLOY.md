@@ -1,5 +1,9 @@
 # Deploying Tenure to Unichain Sepolia + Reactive Lasna
 
+> **2026-11-25: the first Lasna deployment went INACTIVE** (legacy Reactive library + funding into the RC's
+> balance). Cause, evidence, the fixed scripts, and the exact commands to repair the LIVE deployment:
+> [INCIDENT_REACTIVE.md](INCIDENT_REACTIVE.md). The checklist below is for a FRESH deployment with the fixed scripts.
+
 Nothing here has been broadcast yet. The scripts were dry-run against the live chains and run end to end on
 anvil (see "Verification done"). Every external address comes from `deployments/config.json`, which cites an
 official source per value.
@@ -34,21 +38,25 @@ doc names one).
    cast balance 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --ether --rpc-url https://sepolia.unichain.org   # >= 0.02
    cast balance 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --ether --rpc-url https://lasna-rpc.rnk.dev/      # >= 10
    ```
-6. **Deploy on Unichain Sepolia.** Type the keystore password when prompted:
+6. **Deploy on Unichain Sepolia.** The receivers are built for the RC addresses of your NEXT two Lasna CREATEs,
+   so read your Lasna nonce first, and send no other Lasna tx until step 7. Type the keystore password when prompted:
    ```bash
+   export LASNA_NONCE=$(cast nonce 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --rpc-url https://lasna-rpc.rnk.dev/)
    FOUNDRY_PROFILE=deploy forge script script/DeployUnichainSepolia.s.sol \
      --rpc-url https://sepolia.unichain.org --account tenure-burner \
      --sender 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --broadcast --slow
    ```
    This writes `deployments/1301.json`.
-7. **Deploy on Lasna** with the SAME account (the Unichain receivers only accept callbacks from RCs deployed by
-   their own deployer):
+7. **Deploy on Lasna** with the SAME account. Each Unichain receiver accepts callbacks only from the one RC address
+   it was built for, and the script refuses to broadcast if the RCs would land anywhere else. It funds each RC's
+   reserves through the system contract's `depositTo`:
    ```bash
    FOUNDRY_PROFILE=deploy forge script script/DeployLasna.s.sol \
      --rpc-url https://lasna-rpc.rnk.dev/ --account tenure-burner \
      --sender 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --broadcast --slow
    ```
-   This writes `deployments/5318007.json`.
+   This writes `deployments/5318007.json`. Then verify, read-only: `forge script script/CheckReactive.s.sol` must
+   print `ALL CHECKS PASSED`.
 8. **Run the demo:** `bash script/demo_testnet.sh` (110 transactions; see "Run the demo" for `PASSWORD_FILE`, which avoids 111 password
    prompts, and for `RPC`, to switch endpoints if the public one times out).
 9. **Record the addresses** from `deployments/1301.json` and `deployments/5318007.json` in the README.
@@ -61,18 +69,21 @@ Gas from the dry runs (2026-11-25). Unichain Sepolia: 41.5M gas, max fee 0.001 g
 | Chain | Need | What for | Ask for (with margin) |
 |---|---:|---|---:|
 | Unichain Sepolia | ~0.00004 ETH | deployment (41.5M gas) | |
-| | 0.004 ETH | pre-funding of the two callback receivers (`receiverFundingWei` x 2) | |
+| | 0.004 ETH | callback-proxy RESERVES of the two receivers (`receiverFundingWei` x 2, via `depositTo`) | |
 | | <= 0.0004 ETH | demo: 111 txs at the 3M `GAS_LIMIT` (upper bound; measured use is at most 1.43M per tick) | |
 | | **~0.0045 ETH** | | **0.03 ETH** (absorbs a 10x gas spike) |
-| Lasna | 0.55 lREACT | deployment (2.76M gas at 200 gwei) | |
-| | 7 lREACT | pre-funding of the RCs (settler 5, freeze 2: `tenure.reactive.*FundingWei`) | |
-| | **~7.6 lREACT** | | **15 lREACT = 0.15 Sepolia ETH** to the faucet |
+| Lasna | 0.51 lREACT | deployment (2.53M gas at max 200 gwei; ~0.25 at the 100 gwei basefee) | |
+| | 1.1 lREACT | RC RESERVES via `depositTo` (freeze 0.3, settler 0.8: `tenure.reactive.*ReservesWei`) | |
+| | ~1 lREACT/day | running cost: Cron1000 ticks (~0.013 lREACT each, ~80/day) + reactions | |
+| | **~1.6 lREACT + 1/day** | | **15 lREACT = 0.15 Sepolia ETH** to the faucet |
 | Ethereum Sepolia | ~0.18 ETH | 0.15 (lREACT faucet) + 0.03 (bridge) + gas for those 2 txs | **0.25 ETH** |
 
 Balances at the read-only check (2026-11-25): **0 on all three chains** (Unichain Sepolia, Ethereum Sepolia,
-Lasna). The RC funding pays reactive transactions and callbacks over time, and the CRON subscription is billed
-every 100 Lasna blocks. The official pages read here give no per-transaction price, so watch the RC balances on
-reactscan and top up if they run low (see Open items).
+Lasna). Fees (measured 2026-11-25 on the system contract): `basefee (100 gwei) * (gas used + 100,000)` per
+reactive transaction, charged from RESERVES first. A contract with any debt is blacklisted and served nothing
+until the debt is paid. Callbacks are billed to the RECEIVER, in ETH, at the Unichain callback proxy. Top up with
+`depositTo(address)` on the system contract (lREACT) or the proxy (ETH). Never top up by plain transfer: a balance
+"settles nothing on its own".
 
 ## What gets deployed
 
@@ -84,11 +95,11 @@ On Unichain Sepolia (`script/DeployUnichainSepolia.s.sol`, all inputs from `depl
 | `TenureHook` | CREATE2 at a mined address whose low bits carry its permissions (the CREATE2 deployer `0x4e59…956C` exists on 1301) |
 | Pool A "demo": TDA/TDB mock tokens, `MockReferencePrice`, `CuratedVault`, scenario actors, `DemoDirector` | Replays the headline scenario, one `tick()` per tx. The mock oracle is required: the scenario's market moves the fair price |
 | Pool B "chainlink": tWETH (18 dec) / tUSDC (6 dec) mock tokens, `ChainlinkReferencePrice` on the live ETH/USD and USDC/USD feeds, `CuratedVault` | Live Chainlink fair price. Same curator contract as pool A, so a FROZEN on A is relayed to B |
-| `TenureReactiveReceiver`, `TenureFreezeReceiver` | Callback targets behind the official Reactive callback proxy `0x775c…66C1`, pre-funded for callbacks |
+| `TenureReactiveReceiver`, `TenureFreezeReceiver` | Callback targets behind the official Reactive callback proxy `0x775c…66C1`, each bound to its one Lasna RC, with reserves at the proxy |
 
-On Lasna (`script/DeployLasna.s.sol`): `TenureSettlerRC` (keeper-free settlement for pool A: `RebalanceScored`,
-`MarkoutSettled`, and CRON every 100 Lasna blocks) and `TenureFreezeRC` (TierChanged on pools A and B), both
-pre-funded with lREACT.
+On Lasna (`script/DeployLasna.s.sol`): `TenureFreezeRC` (TierChanged on pools A and B; nonce N) and
+`TenureSettlerRC` (keeper-free settlement for pool A: `RebalanceScored`, `MarkoutSettled`, and Cron1000, about
+every 18 minutes; nonce N+1). Both are built on reactive-lib-omni and have lREACT reserves at the system contract.
 
 **Settings that differ from the local demo:**
 - Pool B's `maxOracleAge` is 90,000 s, because the Chainlink testnet feeds have a 24 h heartbeat (86,400 s).
@@ -99,7 +110,8 @@ pre-funded with lREACT.
 ## Deploy order and why
 
 1. Unichain Sepolia first: the Lasna RCs subscribe to the hook's address and pool ids, and call the receivers.
-2. Lasna second, from the same account: `rvm_id` (the RC deployer) must equal the receivers' deployer.
+2. Lasna second, from the same account, with no Lasna tx in between: each receiver trusts exactly one callback
+   sender (the RC address the proxy injects), predicted from the deployer's Lasna nonce (`LASNA_NONCE`).
 3. The demo last. Every tick emits `RebalanceScored`/`MarkoutSettled`/`TierChanged`; the RCs react to them.
 
 ## Verify on the explorer

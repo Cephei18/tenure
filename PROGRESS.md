@@ -699,3 +699,34 @@ Files: README.md
     frozenAt 80, 3 rounds, attacker profit 613.922350593430167887. So no inner call was starved.
 - Deploy scripts set no gas limit (forge estimates). The real broadcasts peaked at 6.9M sent / 5.0M used (1301) and
   1.5M (Lasna), all under the cap. script/demo.sh keeps 25M: it is local-anvil only (no cap).
+
+## Fix: Lasna reactive contracts INACTIVE on their first event (2026-11-25)
+- Root cause (full evidence: docs/INCIDENT_REACTIVE.md). Funding the balance instead of the reserves was real, but
+  NOT the root cause: the RCs were built on the legacy reactive-lib (f6990ce), which the live network no longer serves.
+  - react() is `vmOnly`, and `vm` is false because 0x...fffFfF has code on Lasna. Today 0x8888 calls react()
+    directly, so both RCs reverted "VM only" on their first event (Lasna txs 0x66c37934... cron, 0x40840f4f...
+    TierChanged FROZEN).
+  - pay() accepts only 0xfffFfF, so 0x8888's payment request failed: PaymentFailure + BlacklistContract, debt
+    0.0123 lREACT each.
+  - The receivers compared the injected sender with their deployer; the proxy injects the requesting RC.
+  - Latent: the settler compared Unichain block numbers with Lasna ones (records never due).
+  The legacy RCs cannot be revived (their 7 lREACT and the receivers' 0.004 ETH are stranded).
+- Fix:
+  - src/reactive/* on reactive-lib-omni 3ade0dcf (new pinned submodule; legacy reactive-lib kept for the
+    regression test only); callbacks via SYSTEM.requestCallbackV_1_0; receivers bound to their RC address.
+  - Reserves funded through depositTo (system contract / callback proxy) and checked after the deposit; Cron1000.
+  - RC addresses predicted from LASNA_NONCE; DeployLasna refuses a mismatch. New script/DeployReceivers.s.sol
+    (live re-wire) and script/CheckReactive.s.sol (read-only verification).
+  - Tests now run on test/reactive/utils/ReactiveNetworkSim.sol (billing system contract + proxy modeled on the live
+    network) instead of reactive-test-lib. ReactiveConformance.t.sol replays the incident.
+- Tested:
+  - forge test: 257 passed, 0 failed (34 suites), default profile; reactive suites under FOUNDRY_PROFILE=deploy.
+    forge fmt --check clean.
+  - Dry runs against LIVE chains (simulation only): DeployReceivers on Unichain Sepolia (depositTo reached the
+    reserves); DeployLasna on Lasna (real 0x8888 subscribe + depositTo; addresses = predictions).
+  - CheckReactive on today's live contracts: 14 failures, as expected.
+  - Anvil fork of Unichain, guardian impersonated: requestRestore, restore, tick, tick, settleMany re-freezes A
+    (5 txs).
+- Notes for human: run the commands in docs/INCIDENT_REACTIVE.md, "Fix the live deployment", then "A fresh freeze".
+  Nothing was broadcast. The deployer has 1.71 lREACT; the fix needs ~1.35. For a settler that runs past ~1 day,
+  top up with depositTo (faucet: 0.15 Sepolia ETH = 15 lREACT).

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {ReactiveTest} from "reactive-test-lib/base/ReactiveTest.sol";
-import {CallbackResult} from "reactive-test-lib/interfaces/IReactiveInterfaces.sol";
+import {ReactiveNetworkSim, CallbackResult} from "./utils/ReactiveNetworkSim.sol";
+import {AbstractPayer} from "reactive-lib-omni/base/AbstractPayer.sol";
+import {AbstractCallback} from "reactive-lib-omni/base/AbstractCallback.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
@@ -30,7 +31,9 @@ contract TierEmitter {
 ///         single byte added to TenureHook. Chain A = the fixture's real hook, pool and vault (driven to FROZEN by
 ///         real measured leaks). Chain B = a second real CuratedVault (second pool on the same hook binary) whose
 ///         tier events come from a TierEmitter standing in for chain B's hook.
-contract FreezePropagationTest is VaultFixture, ReactiveTest {
+///         The Reactive Network is ReactiveNetworkSim: the system contract calls react() and bills, the callback proxy
+///         injects the requesting RC and bills the receiver, exactly as on Lasna / Unichain Sepolia.
+contract FreezePropagationTest is VaultFixture, ReactiveNetworkSim {
     uint256 constant CHAIN_A = 1301;
     uint256 constant CHAIN_B = 84532;
     address constant STRANGER = address(0xBAD);
@@ -43,8 +46,7 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
     TenureFreezeReceiver recvB;
     TenureFreezeRC rc;
 
-    function setUp() public override {
-        super.setUp();
+    function setUp() public {
         _setUpVault();
         _deposit(ALICE, 40_000 ether, 40_000 ether);
         _curatorRebalance(-600, 600, L_RANGE, 0);
@@ -63,15 +65,23 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
         vm.stopPrank();
         hookB = new TierEmitter();
 
-        recvA = new TenureFreezeReceiver(address(proxy));
-        recvB = new TenureFreezeReceiver(address(proxy));
-        cv.setFreezeReceiver(address(recvA));
-        cvB.setFreezeReceiver(address(recvB));
+        _setUpReactiveNetwork();
+        // The receivers trust exactly one callback sender: the RC, deployed two creations later. (Nothing else may run
+        // in between: in setUp, forge also bumps the test contract's nonce on plain external calls.)
+        address rcAddr = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 2);
+        recvA = new TenureFreezeReceiver(address(proxy), rcAddr);
+        recvB = new TenureFreezeReceiver(address(proxy), rcAddr);
         rc = new TenureFreezeRC(
             TenureFreezeRC.Endpoint(CHAIN_A, address(hook), PoolId.unwrap(poolId), address(cv), address(recvA)),
             TenureFreezeRC.Endpoint(CHAIN_B, address(hookB), PoolId.unwrap(poolIdB), address(cvB), address(recvB))
         );
-        enableVmMode(address(rc));
+        assertEq(address(rc), rcAddr, "predicted RC address");
+        cv.setFreezeReceiver(address(recvA));
+        cvB.setFreezeReceiver(address(recvB));
+        // Funded the documented way: reserves via depositTo (never a plain transfer to the contract).
+        sys.depositTo{value: 1 ether}(address(rc));
+        proxy.depositTo{value: 0.1 ether}(address(recvA));
+        proxy.depositTo{value: 0.1 ether}(address(recvB));
     }
 
     /// Driven through the simulator so every event of the leaks (including TierChanged -> FROZEN) reaches the RC.
@@ -146,9 +156,9 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
     function test_replayedCallback_isIdempotent_andOnlyTheGuardianClears() public {
         bytes memory payload =
             abi.encodeCall(TenureFreezeReceiver.freeze, (address(0), address(cv), CHAIN_B, bytes32(0)));
-        (bool ok,) = proxy.executeCallback(address(recvA), payload, 200_000, rvmId);
+        (bool ok,) = proxy.execute(address(rc), address(recvA), payload, 200_000);
         assertTrue(ok);
-        (ok,) = proxy.executeCallback(address(recvA), payload, 200_000, rvmId);
+        (ok,) = proxy.execute(address(rc), address(recvA), payload, 200_000);
         assertTrue(ok, "replay does not revert");
         assertTrue(cv.relayFrozen());
 
@@ -164,7 +174,7 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
         vm.roll(vm.getBlockNumber() + 100);
         _curatorRebalance(-1200, 1200, L_RANGE / 2, 0); // curator works again on A
 
-        (ok,) = proxy.executeCallback(address(recvA), payload, 200_000, rvmId); // a stale replay after the clear
+        (ok,) = proxy.execute(address(rc), address(recvA), payload, 200_000); // a stale replay after the clear
         assertTrue(cv.relayFrozen(), "worst case of a replay: re-freeze (safe direction), never unfreeze");
     }
 
@@ -192,14 +202,14 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
         hook.proposeMandate(poolId, Mandate(120, 12_000, 3000, 0.2e18, 10));
         vm.stopPrank();
 
-        // (2) through the callback proxy with our RVM ID, any payload other than freeze(...) fails
+        // (2) through the callback proxy as our RC, any payload other than freeze(...) fails
         bytes[3] memory other = [
             abi.encodeWithSignature("clearRelayFreeze()"),
             abi.encodeWithSignature("unfreeze(address,address)", address(0), address(cv)),
             abi.encodeWithSignature("settleMany(address,bytes32,uint256[])", address(0), poolId, new uint256[](0))
         ];
         for (uint256 i; i < 3; ++i) {
-            (bool ok,) = proxy.executeCallback(address(recvA), other[i], 200_000, rvmId);
+            (bool ok,) = proxy.execute(address(rc), address(recvA), other[i], 200_000);
             assertFalse(ok, "receiver exposes no non-freeze action");
         }
         assertFalse(cv.relayFrozen());
@@ -215,16 +225,22 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
 
     function test_receiver_auth() public {
         vm.prank(STRANGER);
-        vm.expectRevert(bytes("Authorized sender only"));
-        recvA.freeze(address(this), address(cv), CHAIN_B, bytes32(0));
+        vm.expectRevert(abi.encodeWithSelector(AbstractPayer.NotAuthorized.selector, STRANGER, address(proxy)));
+        recvA.freeze(address(rc), address(cv), CHAIN_B, bytes32(0));
 
-        vm.prank(STRANGER);
-        TenureFreezeReceiver foreign = new TenureFreezeReceiver(address(proxy)); // someone else's RVM ID
-        cv.setFreezeReceiver(address(foreign));
+        // Through the real proxy, a callback requested by ANY other reactive contract is rejected.
         bytes memory payload =
             abi.encodeCall(TenureFreezeReceiver.freeze, (address(0), address(cv), CHAIN_B, bytes32(0)));
-        (bool ok,) = proxy.executeCallback(address(foreign), payload, 200_000, rvmId);
-        assertFalse(ok, "our RVM cannot drive a receiver deployed under another RVM ID");
+        (bool ok, bytes memory ret) = proxy.execute(STRANGER, address(recvA), payload, 200_000);
+        assertFalse(ok, "a foreign RC cannot drive our receiver");
+        assertEq(ret, abi.encodeWithSelector(AbstractCallback.CallbackNotAuthorized.selector, STRANGER, address(rc)));
+
+        vm.prank(STRANGER);
+        TenureFreezeReceiver foreign = new TenureFreezeReceiver(address(proxy), STRANGER); // bound to another RC
+        cv.setFreezeReceiver(address(foreign));
+        proxy.depositTo{value: 0.1 ether}(address(foreign));
+        (ok,) = proxy.execute(address(rc), address(foreign), payload, 200_000);
+        assertFalse(ok, "our RC cannot drive a receiver bound to another RC");
         assertFalse(cv.relayFrozen());
     }
 
@@ -232,7 +248,7 @@ contract FreezePropagationTest is VaultFixture, ReactiveTest {
         cv.setFreezeReceiver(address(0));
         bytes memory payload =
             abi.encodeCall(TenureFreezeReceiver.freeze, (address(0), address(cv), CHAIN_B, bytes32(0)));
-        (bool ok,) = proxy.executeCallback(address(recvA), payload, 200_000, rvmId);
+        (bool ok,) = proxy.execute(address(rc), address(recvA), payload, 200_000);
         assertFalse(ok);
         assertFalse(cv.relayFrozen());
     }

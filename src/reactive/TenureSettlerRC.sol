@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.29;
 
-import {AbstractReactive} from "reactive-lib/abstract-base/AbstractReactive.sol";
+import {AbstractReactive} from "reactive-lib-omni/base/AbstractReactive.sol";
+import {ISystemContract} from "reactive-lib-omni/interfaces/ISystemContract.sol";
 
 /// @title TenureSettlerRC
 /// @notice Reactive-Network side of keeper-free markout settlement (M4.5a). Watches one Tenure pool on the origin
 ///         chain and, once its rebalance records are due, asks TenureReactiveReceiver on the destination chain to
 ///         call the hook's permissionless `settleMany`. With this, the pool sets `autoSettlePerSwap = 0`, so swappers
 ///         pay no markout gas and no off-chain keeper is needed.
-/// @dev Subscriptions (made on the Reactive Network copy, `!vm`):
+/// @dev Built on the CURRENT Reactive library (reactive-lib-omni): the system contract 0x8888...8888 calls `react()`
+///      directly on this contract (`onlySystem`) and bills it (see TenureFreezeRC and docs/INCIDENT_REACTIVE.md).
+///      Subscriptions (made in the constructor through the system contract):
 ///        - RebalanceScored(poolId, recordId, ...) from the hook  -> queue recordId, due after `delayBlocks`
 ///        - MarkoutSettled(poolId, recordId, ...) from the hook   -> drop recordId (settled by anyone, any path)
-///        - the cron topic from the system contract               -> send due records (at most MAX_BATCH per callback)
-///      Timing: cron and RebalanceScored notifications carry block numbers that may come from different chains, so
-///      `delayBlocks` is a conservative wait chosen at deployment. Being early is harmless: the hook re-checks
-///      due-ness and skips records that are not due. A record that is sent but not settled (callback reverted, e.g.
-///      stale oracle) is re-sent at most once every `delayBlocks`, until a MarkoutSettled notification drops it.
+///        - a cron topic of the legacy emitter 0x...fffFfF         -> send due records (at most MAX_BATCH per callback)
+///      Timing: every deadline is on THIS contract's clock, `block.number` of the Reactive Network at react() time.
+///      A RebalanceScored log carries the ORIGIN chain's block number (Unichain Sepolia is near 68.8M while Lasna is
+///      near 9.2M), so mixing the two would leave records never due. `delayBlocks` (Reactive blocks) must cover the
+///      hook's window W (origin blocks) in wall time. Being early is harmless: the hook re-checks due-ness and skips
+///      records that are not due. A record that is sent but not settled (callback reverted, e.g. stale oracle) is
+///      re-sent at most once every `delayBlocks`, until a MarkoutSettled notification drops it.
+///      Every cron tick is a billed reactive transaction: use the slowest cron topic the demo can live with.
 contract TenureSettlerRC is AbstractReactive {
     /// @dev keccak256("RebalanceScored(bytes32,uint256,int256,uint256,uint256,uint256,uint256,uint8)")
     uint256 public constant SCORED_TOPIC =
@@ -23,6 +29,8 @@ contract TenureSettlerRC is AbstractReactive {
     /// @dev keccak256("MarkoutSettled(bytes32,uint256,int256,uint256,uint256,uint256,uint256,uint8)")
     uint256 public constant SETTLED_TOPIC =
         uint256(keccak256("MarkoutSettled(bytes32,uint256,int256,uint256,uint256,uint256,uint256,uint8)"));
+    /// @dev Emitter of the Cron events (docs: the legacy system contract keeps emitting them).
+    address public constant CRON_EMITTER = 0x0000000000000000000000000000000000fffFfF;
     uint256 public constant MAX_BATCH = 8; // records per callback
     uint256 public constant MAX_SCAN = 64; // pending entries inspected per cron tick
     uint64 public constant GAS_BASE = 150_000;
@@ -35,6 +43,9 @@ contract TenureSettlerRC is AbstractReactive {
     address public immutable receiver;
     uint256 public immutable delayBlocks;
     uint256 public immutable cronTopic;
+    /// @notice True if the constructor registered the subscriptions (false only where no system contract exists,
+    ///         e.g. a local anvil wiring check). Deploy scripts require it on a live Reactive chain.
+    bool public immutable subscribed;
 
     struct Pending {
         uint64 dueBlock;
@@ -51,6 +62,7 @@ contract TenureSettlerRC is AbstractReactive {
 
     /// @param _originChainId Chain where TenureHook lives (RebalanceScored / MarkoutSettled come from there).
     /// @param _destChainId Chain of the receiver (normally the same chain as the hook).
+    /// @param _delayBlocks Wait before a queued record is sent, in Reactive Network blocks.
     /// @param cronChainId Chain id the cron events are emitted on (the Reactive Network itself).
     /// @param _cronTopic Cron topic to subscribe to (e.g. the "every N blocks" topic of the deployment).
     constructor(
@@ -70,12 +82,12 @@ contract TenureSettlerRC is AbstractReactive {
         receiver = _receiver;
         delayBlocks = _delayBlocks;
         cronTopic = _cronTopic;
-        if (!vm) {
-            service.subscribe(_originChainId, _hook, SCORED_TOPIC, uint256(_poolId), REACTIVE_IGNORE, REACTIVE_IGNORE);
-            service.subscribe(_originChainId, _hook, SETTLED_TOPIC, uint256(_poolId), REACTIVE_IGNORE, REACTIVE_IGNORE);
-            service.subscribe(
-                cronChainId, address(service), _cronTopic, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE
-            );
+        bool live = address(SYSTEM).code.length != 0;
+        subscribed = live;
+        if (live) {
+            SYSTEM.subscribe(_originChainId, _hook, SCORED_TOPIC, uint256(_poolId), REACTIVE_IGNORE, REACTIVE_IGNORE);
+            SYSTEM.subscribe(_originChainId, _hook, SETTLED_TOPIC, uint256(_poolId), REACTIVE_IGNORE, REACTIVE_IGNORE);
+            SYSTEM.subscribe(cronChainId, CRON_EMITTER, _cronTopic, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         }
     }
 
@@ -84,24 +96,30 @@ contract TenureSettlerRC is AbstractReactive {
         return _queue.length;
     }
 
-    /// @notice Reactive entry point (IReactive.react), called by the ReactVM for every matching notification.
-    /// @dev Only the ReactVM copy reacts (`vmOnly`); notifications for other contracts/pools/topics are ignored.
-    function react(LogRecord calldata log) external vmOnly {
-        if (log.chain_id == originChainId && log._contract == hook && log.topic_1 == uint256(poolId)) {
-            if (log.topic_0 == SCORED_TOPIC) {
-                _queueRecord(log.topic_2, log.block_number);
-            } else if (log.topic_0 == SETTLED_TOPIC) {
-                _drop(log.topic_2);
+    /// @notice Settle any outstanding debt to the system contract from this contract's own balance (docs: the
+    ///         library's `_coverDebt()` is internal; contracts expose it). Anyone may call: it can only pay the debt.
+    function coverDebt() external {
+        _coverDebt();
+    }
+
+    /// @notice Reactive entry point (IReactive.react), called by the system contract for every matching notification.
+    /// @dev Only the system contract may call (`onlySystem`); notifications for other contracts/pools/topics are ignored.
+    function react(LogRecord calldata log) external onlySystem {
+        if (log.chainId == originChainId && log.contractAddress == hook && log.topic1 == uint256(poolId)) {
+            if (log.topic0 == SCORED_TOPIC) {
+                _queueRecord(log.topic2, block.number);
+            } else if (log.topic0 == SETTLED_TOPIC) {
+                _drop(log.topic2);
             }
-        } else if (log.topic_0 == cronTopic && log._contract == address(SERVICE_ADDR)) {
-            _flush(log.block_number);
+        } else if (log.topic0 == cronTopic && log.contractAddress == CRON_EMITTER) {
+            _flush(block.number);
         }
     }
 
-    function _queueRecord(uint256 recordId, uint256 blockNumber) internal {
+    function _queueRecord(uint256 recordId, uint256 nowBlock) internal {
         // type(uint256).max = an empty-vault rebalance: nothing was recorded, nothing to settle.
         if (recordId == type(uint256).max || _slotPlusOne[recordId] != 0) return;
-        uint256 due = blockNumber + delayBlocks;
+        uint256 due = nowBlock + delayBlocks;
         pending[recordId] = Pending(uint64(due), 0);
         _queue.push(recordId);
         _slotPlusOne[recordId] = _queue.length;
@@ -137,8 +155,16 @@ contract TenureSettlerRC is AbstractReactive {
         assembly ("memory-safe") {
             mstore(ids, n)
         }
+        // First argument: the network overwrites it with THIS contract's address (the receiver's callback sender).
         bytes memory payload = abi.encodeWithSignature("settleMany(address,bytes32,uint256[])", address(0), poolId, ids);
-        emit Callback(destChainId, receiver, GAS_BASE + GAS_PER_RECORD * uint64(n), payload);
+        SYSTEM.requestCallbackV_1_0(
+            ISystemContract.CallbackConfiguration_V_1_0({
+                chainId: destChainId,
+                recipient: receiver,
+                gasLimit: GAS_BASE + GAS_PER_RECORD * uint64(n),
+                payload: payload
+            })
+        );
         emit SettleRequested(n, nowBlock);
     }
 }

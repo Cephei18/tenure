@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {ReactiveTest} from "reactive-test-lib/base/ReactiveTest.sol";
-import {CallbackResult, CronType} from "reactive-test-lib/interfaces/IReactiveInterfaces.sol";
-import {ReactiveConstants} from "reactive-test-lib/constants/ReactiveConstants.sol";
+import {ReactiveNetworkSim, CallbackResult} from "./utils/ReactiveNetworkSim.sol";
+import {AbstractPayer} from "reactive-lib-omni/base/AbstractPayer.sol";
+import {AbstractCallback} from "reactive-lib-omni/base/AbstractCallback.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {IReactive} from "reactive-lib/interfaces/IReactive.sol";
+import {IReactive} from "reactive-lib-omni/interfaces/IReactive.sol";
 
 import {VaultFixture} from "../utils/VaultFixture.sol";
 import {TenureHook, PoolSettings} from "../../src/TenureHook.sol";
@@ -14,12 +14,12 @@ import {CuratedVault} from "../../src/CuratedVault.sol";
 import {TenureReactiveReceiver, ITenureSettle} from "../../src/reactive/TenureReactiveReceiver.sol";
 import {TenureSettlerRC} from "../../src/reactive/TenureSettlerRC.sol";
 
-/// @notice M4.5a: keeper-free markout settlement through the Reactive Network, simulated with reactive-test-lib.
+/// @notice M4.5a: keeper-free markout settlement through the Reactive Network, simulated with ReactiveNetworkSim (billing system contract + callback proxy, as on Lasna).
 ///         Real hook + real CuratedVault on the "origin" chain; TenureSettlerRC reacts to the hook's events and cron;
 ///         the callback proxy calls TenureReactiveReceiver, which calls the hook's permissionless settleMany.
-contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
+contract ReactiveSettlementTest is VaultFixture, ReactiveNetworkSim {
     uint256 constant ORIGIN = 1301; // a label for the hook's chain (e.g. Unichain Sepolia)
-    uint256 constant DELAY = 50; // = WINDOW: in the simulator both block numbers are the same chain's
+    uint256 constant DELAY = 50; // = WINDOW: in the simulator the hook and the RC share one block clock
     address constant STRANGER = address(0xBAD);
 
     TenureReactiveReceiver receiver;
@@ -31,23 +31,19 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
         s.autoSettlePerSwap = 0;
     }
 
-    function setUp() public override {
-        super.setUp(); // reactive-test-lib: system contract at SERVICE_ADDR, callback proxy, rvmId = this
+    function setUp() public {
         _setUpVault();
         _deposit(ALICE, 40_000 ether, 40_000 ether);
         cv.setCurator(address(this)); // the test drives rebalances through the simulator as the curator
-        receiver = new TenureReactiveReceiver(address(proxy), ITenureSettle(address(hook)));
+        _setUpReactiveNetwork();
+        address rcAddr = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        receiver = new TenureReactiveReceiver(address(proxy), ITenureSettle(address(hook)), rcAddr);
         rc = new TenureSettlerRC(
-            ORIGIN,
-            ORIGIN,
-            address(hook),
-            PoolId.unwrap(poolId),
-            address(receiver),
-            DELAY,
-            reactiveChainId,
-            ReactiveConstants.CRON_TOPIC_10
+            ORIGIN, ORIGIN, address(hook), PoolId.unwrap(poolId), address(receiver), DELAY, REACTIVE_CHAIN_ID, CRON_10
         );
-        enableVmMode(address(rc));
+        assertEq(address(rc), rcAddr, "predicted RC address");
+        sys.depositTo{value: 1 ether}(address(rc)); // reserves, the documented way
+        proxy.depositTo{value: 0.1 ether}(address(receiver));
     }
 
     // ------------------------------------------------------------------ happy path
@@ -61,11 +57,11 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
         assertNoCallbacks(r);
         assertEq(rc.pendingCount(), 1, "queued from RebalanceScored");
 
-        r = advanceAndTriggerCron(DELAY - 1, CronType.Cron10);
+        r = advanceAndTriggerCron(DELAY - 1, CRON_10);
         assertNoCallbacks(r);
         assertFalse(hook.recordOf(poolId, 0).settled, "not before the delay");
 
-        r = advanceAndTriggerCron(1, CronType.Cron10);
+        r = advanceAndTriggerCron(1, CRON_10);
         assertCallbackCount(r, 1);
         assertCallbackSuccess(r, 0);
         assertCallbackEmitted(r, address(receiver));
@@ -82,7 +78,7 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
         _rebalance(-600, 600);
         assertEq(rc.pendingCount(), 3);
 
-        CallbackResult[] memory r = advanceAndTriggerCron(DELAY, CronType.Cron10);
+        CallbackResult[] memory r = advanceAndTriggerCron(DELAY, CRON_10);
         assertCallbackCount(r, 1);
         assertCallbackSuccess(r, 0);
         assertEq(abi.decode(r[0].returnData, (uint256)), 3);
@@ -99,7 +95,7 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
             triggerAndReact(address(hook), abi.encodeCall(TenureHook.settle, (poolId, uint256(0))), ORIGIN);
         assertNoCallbacks(r);
         assertEq(rc.pendingCount(), 0, "dropped on MarkoutSettled");
-        assertNoCallbacks(triggerCron(CronType.Cron10));
+        assertNoCallbacks(triggerCron(CRON_10));
     }
 
     /// A callback that reverts (stale oracle) leaves the record pending; it is re-sent after the delay.
@@ -107,16 +103,16 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
         _rebalance(-600, 600);
         vm.roll(vm.getBlockNumber() + DELAY);
         vm.warp(vm.getBlockTimestamp() + MAX_ORACLE_AGE + 1); // the oracle goes stale
-        CallbackResult[] memory r = triggerCron(CronType.Cron10);
+        CallbackResult[] memory r = triggerCron(CRON_10);
         assertCallbackCount(r, 1);
         assertCallbackFailure(r, 0);
         assertFalse(hook.recordOf(poolId, 0).settled);
         assertEq(rc.pendingCount(), 1, "still pending");
 
-        assertNoCallbacks(advanceAndTriggerCron(DELAY - 1, CronType.Cron10)); // no spam before the retry interval
+        assertNoCallbacks(advanceAndTriggerCron(DELAY - 1, CRON_10)); // no spam before the retry interval
         (uint160 fair,) = oracle.getSqrtPriceX96(poolId);
         oracle.setPrice(poolId, fair); // the feed recovers
-        r = advanceAndTriggerCron(1, CronType.Cron10);
+        r = advanceAndTriggerCron(1, CRON_10);
         assertCallbackCount(r, 1);
         assertCallbackSuccess(r, 0);
         assertTrue(hook.recordOf(poolId, 0).settled);
@@ -124,38 +120,57 @@ contract ReactiveSettlementTest is VaultFixture, ReactiveTest {
 
     function test_otherPoolsAndContracts_areIgnored() public {
         IReactive.LogRecord memory log;
-        log.chain_id = ORIGIN;
-        log._contract = address(hook);
-        log.topic_0 = rc.SCORED_TOPIC();
-        log.topic_1 = uint256(keccak256("another pool"));
-        log.topic_2 = 7;
-        vm.prank(address(ReactiveConstants.SERVICE_ADDR));
+        log.chainId = ORIGIN;
+        log.contractAddress = address(hook);
+        log.topic0 = rc.SCORED_TOPIC();
+        log.topic1 = uint256(keccak256("another pool"));
+        log.topic2 = 7;
+        vm.startPrank(SYSTEM_ADDR);
         rc.react(log);
-        log.topic_1 = uint256(PoolId.unwrap(poolId));
-        log._contract = STRANGER; // same event shape from a different contract
+        log.topic1 = uint256(PoolId.unwrap(poolId));
+        log.contractAddress = STRANGER; // same event shape from a different contract
         rc.react(log);
-        log._contract = address(hook);
-        log.chain_id = ORIGIN + 1; // right contract address, wrong chain
+        log.contractAddress = address(hook);
+        log.chainId = ORIGIN + 1; // right contract address, wrong chain
         rc.react(log);
+        vm.stopPrank();
         assertEq(rc.pendingCount(), 0);
     }
 
     // ------------------------------------------------------------------ authorization
+    /// Only the system contract may call react(): a forged notification cannot queue or flush anything.
+    function test_react_onlySystem() public {
+        IReactive.LogRecord memory log;
+        log.chainId = ORIGIN;
+        log.contractAddress = address(hook);
+        log.topic0 = rc.SCORED_TOPIC();
+        log.topic1 = uint256(PoolId.unwrap(poolId));
+        vm.prank(STRANGER);
+        vm.expectRevert(abi.encodeWithSelector(AbstractPayer.NotAuthorized.selector, STRANGER, SYSTEM_ADDR));
+        rc.react(log);
+    }
+
     function test_receiver_rejectsDirectCalls() public {
         uint256[] memory ids = new uint256[](1);
         vm.prank(STRANGER);
-        vm.expectRevert(bytes("Authorized sender only"));
-        receiver.settleMany(address(this), poolId, ids);
+        vm.expectRevert(abi.encodeWithSelector(AbstractPayer.NotAuthorized.selector, STRANGER, address(proxy)));
+        receiver.settleMany(address(rc), poolId, ids);
     }
 
-    function test_receiver_rejectsForeignRvmId() public {
-        vm.prank(STRANGER); // someone else deploys a receiver: its RVM ID is theirs, not ours
-        TenureReactiveReceiver foreign = new TenureReactiveReceiver(address(proxy), ITenureSettle(address(hook)));
+    function test_receiver_rejectsForeignCallbackSender() public {
         uint256[] memory ids = new uint256[](1);
         bytes memory payload = abi.encodeCall(TenureReactiveReceiver.settleMany, (address(0), poolId, ids));
-        (bool ok, bytes memory ret) = proxy.executeCallback(address(foreign), payload, 1_000_000, rvmId);
-        assertFalse(ok, "callback from our RVM to a receiver with another RVM ID must fail");
-        assertEq(keccak256(ret), keccak256(abi.encodeWithSignature("Error(string)", "Authorized RVM ID only")));
+        // another reactive contract requests a callback to OUR receiver
+        (bool ok, bytes memory ret) = proxy.execute(STRANGER, address(receiver), payload, 1_000_000);
+        assertFalse(ok, "only our RC may spend this receiver's callback fees");
+        assertEq(ret, abi.encodeWithSelector(AbstractCallback.CallbackNotAuthorized.selector, STRANGER, address(rc)));
+
+        vm.prank(STRANGER); // someone else's receiver, bound to their RC
+        TenureReactiveReceiver foreign =
+            new TenureReactiveReceiver(address(proxy), ITenureSettle(address(hook)), STRANGER);
+        proxy.depositTo{value: 0.1 ether}(address(foreign));
+        (ok,) = proxy.execute(address(rc), address(foreign), payload, 1_000_000);
+        assertFalse(ok, "our RC cannot drive a receiver bound to another RC");
     }
 
     /// Pools settled by Reactive set autoSettlePerSwap = 0: swappers pay nothing for markouts.

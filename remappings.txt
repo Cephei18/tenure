@@ -13,3 +13,4 @@ permit2/=lib/uniswap-hooks/lib/v4-periphery/lib/permit2/
 solmate/=lib/uniswap-hooks/lib/v4-core/lib/solmate/
 reactive-lib/=lib/reactive-lib/src/
 reactive-test-lib/=lib/reactive-test-lib/src/
+reactive-lib-omni/=lib/reactive-lib-omni/src/

@@ -31,9 +31,9 @@
     "chainId": { "value": 5318007, "source": "https://dev.reactive.network/reactive-mainnet" },
     "rpc": { "value": "https://lasna-rpc.rnk.dev/", "source": "https://dev.reactive.network/reactive-mainnet" },
     "explorer": { "value": "https://lasna.reactscan.net", "source": "https://dev.reactive.network/reactive-mainnet" },
-    "systemContract": { "value": "0x8888888888888888888888888888888888888888", "source": "https://dev.reactive.network/reactive-mainnet" },
-    "cronEmitter": { "value": "0x0000000000000000000000000000000000fffFfF", "source": "https://dev.reactive.network/reactive-contracts", "note": "Legacy system contract; emits CRON events. The pinned reactive-lib also subscribes THROUGH this address (AbstractReactive.SERVICE_ADDR). Check with `cast code` before broadcasting (docs/DEPLOY.md)." },
-    "cronTopic": { "value": "0xb49937fb8970e19fd46d48f7e3fb00d659deac0347f79cd7cb542f0fc1503c70", "name": "Cron100", "source": "https://dev.reactive.network/reactive-contracts", "note": "Every cron event is a billed reactive tx: Cron100 (every 100 Lasna blocks) keeps the bill small." },
+    "systemContract": { "value": "0x8888888888888888888888888888888888888888", "source": "https://dev.reactive.network/reactive-mainnet", "note": "Subscriptions, react() calls, billing, depositTo/reserves/debt. reactive-lib-omni (AbstractReactive.SYSTEM) uses it." },
+    "cronEmitter": { "value": "0x0000000000000000000000000000000000fffFfF", "source": "https://dev.reactive.network/reactive-contracts", "note": "Legacy system contract; still EMITS the Cron events, but is no longer the subscription/payment endpoint. RCs built on the legacy reactive-lib (service = this address) are blacklisted on their first event: docs/INCIDENT_REACTIVE.md." },
+    "cronTopic": { "value": "0xe20b31294d84c3661ddc8f423abb9c70310d0cf172aa2714ead78029b325e3f4", "name": "Cron1000", "source": "https://dev.reactive.network/reactive-contracts", "note": "Every cron event is a billed reactive tx. Measured 2026-11-25: fee = basefee 100 gwei * (gas + _extraGas 100000) = ~0.012-0.016 lREACT per tick; Lasna ~1.085 s/block. Cron100 (~108 s) ~10 lREACT/day; Cron1000 (~18 min) ~1 lREACT/day." },
     "faucet": {
       "value": "0x9b9BB25f1A81078C544C829c5EB7822d747Cf434",
       "chain": "ethereumSepolia",
@@ -76,11 +76,13 @@
       "maxSettleDev": 100,
       "autoSettlePerSwap": 1
     },
+    "_receiverFundingDoc": "ETH deposited into EACH receiver's RESERVES at the Unichain callback proxy with depositTo(address). Never sent to the receiver's own balance.",
     "receiverFundingWei": "2000000000000000",
     "reactive": {
+      "_doc": "lREACT deposited into each RC's RESERVES at the system contract 0x8888 with depositTo(address) (DeployLasna). settlerDelayBlocks is in LASNA blocks: 60 x ~1.085 s = ~65 s > the hook window W = 50 Unichain blocks of 1 s.",
       "settlerDelayBlocks": 60,
-      "settlerFundingWei": "5000000000000000000",
-      "freezeRcFundingWei": "2000000000000000000"
+      "freezeRcReservesWei": "300000000000000000",
+      "settlerReservesWei": "800000000000000000"
     }
   }
 }

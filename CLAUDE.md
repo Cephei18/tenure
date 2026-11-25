@@ -99,8 +99,12 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   Before adding ANY hook code, move more pure math (e.g. RiskBudget.refill) into TenureScorer first.
 - vm.revertToState also reverts the TEST CONTRACT's storage: set loop params (seed, flags) AFTER reverting.
 - Windows: `python3` is not on PATH (Store alias); run `python -m pytest sim -q`.
-- Reactive libs pinned: reactive-lib f6990ce3526928d039fec78855b2004ff8d65c9f, reactive-test-lib 2ff9b2a68ca9956306ec943c10d1c757c1dd1956
-  (remapped reactive-lib/, reactive-test-lib/). Test sim: rvmId = test contract; proxy injects it as the callback's 1st arg.
+- Reactive: src/ uses reactive-lib-omni 3ade0dcf (remap reactive-lib-omni/): 0x8888 calls react() (onlySystem) and
+  bills; the proxy injects the REQUESTING RC (not the deployer) as callback arg 1. Legacy reactive-lib f6990ce
+  (vmOnly, 0xfffFfF) is dead on Lasna: test-only (regression). Tests use test/reactive/utils/ReactiveNetworkSim.sol,
+  NOT reactive-test-lib (it never bills, fakes VM mode). Fund via depositTo (reserves). docs/INCIDENT_REACTIVE.md.
+- forge setUp: plain external calls from the test contract bump its nonce; predict CREATE addresses with only
+  `new` in between.
 <!-- Append non-obvious discoveries here (API quirks, gotchas, decisions). Keep each to 1-2 lines. -->
 - vm.snapshotGasLastCall = receipt-style gasUsed: INCLUDES 21k intrinsic + calldata, refunds APPLIED. gasleft() deltas are gross.
 - via-IR "stack too deep" in tests: a pure virtual constant override (e.g. autoSettle) re-inlines a big setUp per contract;

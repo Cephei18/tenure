@@ -87,8 +87,9 @@ cron topic, and asks `TenureReactiveReceiver` on the hook's chain to call `hook.
 zero bytes to TenureHook; `test/HookSizeFrozen.t.sol` pins the hook size in both profiles.
 - **Trust model:** the relay is a liveness aid only. `settleMany` is permissionless, and the hook re-checks
   everything: due-ness, oracle freshness, spot vs fair, already settled. The receiver accepts calls only from the
-  callback proxy (`authorizedSenderOnly`) carrying our RVM ID (`rvmIdOnly`). That stops strangers from spending the
-  receiver's pre-paid callback fees; it is not needed for correctness.
+  callback proxy (`onlyServiceProvider`) carrying our TenureSettlerRC as the callback sender (`onlyCallbackSender`;
+  the proxy injects the requesting reactive contract's address). That stops strangers from spending the receiver's
+  callback reserves; it is not needed for correctness.
 - **Replayed or duplicate callbacks:** harmless. A settled record is skipped (`settleMany` returns 0 for it), and a
   record that is not yet due is skipped. A callback that reverts (stale oracle, spot off fair) leaves the record
   queued. The RC re-sends it at most once every `delayBlocks` until `MarkoutSettled` drops it.
@@ -111,7 +112,7 @@ TenureHook: the flag lives in the vault, and the hook size is pinned by `test/Ho
   msg.sender, the receiver reverts on every vault and hook admin or curator function, and every non-`freeze`
   payload through the proxy fails.
 - **Trust model:** a vault accepts relays only from the receiver its owner set (`setFreezeReceiver`; address(0)
-  disables relays). The receiver accepts only the callback proxy carrying our RVM ID.
+  disables relays). The receiver accepts only the callback proxy carrying our TenureFreezeRC as callback sender.
 - **Duplicates and replays:** the RC relays once per FROZEN episode. A duplicate notification is ignored until
   that side leaves FROZEN (guardian restore). At the vault, `relayFreeze` is idempotent. A replayed callback
   after the guardian cleared the flag re-freezes: that costs liveness, never funds, and only in the safe direction.

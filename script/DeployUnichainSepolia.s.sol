@@ -26,6 +26,7 @@ import {TestSwapper} from "../test/utils/TestActors.sol";
 import {MockAggregator} from "../test/utils/MockAggregator.sol";
 import {Market, PoisonedCurator, Attacker} from "../test/scenario/ScenarioActors.sol";
 import {TenureHookDeployer} from "./base/TenureHookDeployer.sol";
+import {ReactiveWiring} from "./base/ReactiveWiring.sol";
 import {DemoLiquidity, DemoDirector} from "./demo/DemoActors.sol";
 
 /// @notice M7.1: the whole Unichain Sepolia (1301) deployment, every input read from deployments/config.json.
@@ -34,15 +35,18 @@ import {DemoLiquidity, DemoDirector} from "./demo/DemoActors.sol";
 ///           script/demo_testnet.sh can replay the headline scenario on-chain, one tick per tx.
 ///         - Pool B "chainlink": mock tWETH/tUSDC priced by the LIVE Chainlink ETH/USD and USDC/USD feeds through
 ///           ChainlinkReferencePrice. Same curator contract as pool A, so a freeze on A is relayed to B.
-///         - TenureReactiveReceiver (keeper-free settlement) and TenureFreezeReceiver (cross-vault freeze), funded,
-///           behind the official Reactive callback proxy. Both vaults accept relayed freezes from the receiver.
+///         - TenureReactiveReceiver (keeper-free settlement) and TenureFreezeReceiver (cross-vault freeze), behind the
+///           official Reactive callback proxy, funded through the proxy's depositTo (reserves). Each trusts exactly
+///           one callback sender: the Lasna RC that DeployLasna creates next (LASNA_NONCE; see ReactiveWiring).
+///           Both vaults accept relayed freezes from the receiver.
 ///         Writes every address to deployments/<chainId>.json (read by script/DeployLasna.s.sol).
 /// @dev ALWAYS FOUNDRY_PROFILE=deploy (via-IR): the default profile's hook is over EIP-170. Commands: docs/DEPLOY.md.
 ///      Dry run against the live chain (simulation only, no key needed):
+///        LASNA_NONCE=$(cast nonce 0xD9df64Cb859206eECF3761ec4eb5057B579438A2 --rpc-url https://lasna-rpc.rnk.dev/) \
 ///        FOUNDRY_PROFILE=deploy forge script script/DeployUnichainSepolia.s.sol \
 ///          --rpc-url https://sepolia.unichain.org --sender 0xD9df64Cb859206eECF3761ec4eb5057B579438A2
 ///      On chain 31337 (anvil) it deploys its own PoolManager and mock Chainlink feeds instead.
-contract DeployUnichainSepolia is TenureHookDeployer {
+contract DeployUnichainSepolia is TenureHookDeployer, ReactiveWiring {
     using stdJson for string;
     using PoolIdLibrary for PoolKey;
 
@@ -67,6 +71,9 @@ contract DeployUnichainSepolia is TenureHookDeployer {
     // reactive receivers
     TenureReactiveReceiver internal settleReceiver;
     TenureFreezeReceiver internal freezeReceiver;
+    uint256 internal lasnaNonce;
+    address internal freezeRC; // predicted Lasna address (DeployLasna asserts it)
+    address internal settlerRC; // predicted Lasna address (DeployLasna asserts it)
 
     function run() external {
         cfg = vm.readFile("deployments/config.json");
@@ -174,12 +181,17 @@ contract DeployUnichainSepolia is TenureHookDeployer {
         );
         _addFullRange(keyB, l * 99 / 100, a0, a1);
 
+        _vaultB(p, usdcPerWeth, wethIs0);
+    }
+
+    /// @dev Split out of _deployChainlinkPool only to stay under the legacy codegen's stack limit (default profile).
+    function _vaultB(string memory p, uint256 usdcPerWeth, bool wethIs0) internal {
         vaultB = new CuratedVault(pm, hook, keyB, me, address(curator), 50, "Tenure Chainlink Vault", "tnCL");
         hook.registerPool(keyB, address(vaultB), oracleB, _settings(p));
         uint256 depWeth = cfg.readUint(string.concat(p, ".depositWeth"));
         uint256 depUsdc = depWeth * usdcPerWeth / 1e18;
         (uint256 d0, uint256 d1) = wethIs0 ? (depWeth, depUsdc) : (depUsdc, depWeth);
-        _mintApprove(c0, c1, address(vaultB), d0, d1);
+        _mintApprove(keyB.currency0, keyB.currency1, address(vaultB), d0, d1);
         vaultB.deposit(d0, d1, 0, me);
     }
 
@@ -187,8 +199,12 @@ contract DeployUnichainSepolia is TenureHookDeployer {
     function _deployReceivers() internal {
         address proxy = cfg.readAddress(".unichainSepolia.reactiveCallbackProxy.value");
         uint256 fund = cfg.readUint(".tenure.receiverFundingWei");
-        settleReceiver = new TenureReactiveReceiver{value: fund}(proxy, ITenureSettle(address(hook)));
-        freezeReceiver = new TenureFreezeReceiver{value: fund}(proxy);
+        lasnaNonce = local ? vm.envOr("LASNA_NONCE", uint256(0)) : vm.envUint("LASNA_NONCE");
+        (freezeRC, settlerRC) = _predictRCs(me, lasnaNonce);
+        settleReceiver = new TenureReactiveReceiver(proxy, ITenureSettle(address(hook)), settlerRC);
+        freezeReceiver = new TenureFreezeReceiver(proxy, freezeRC);
+        _fundReserves(proxy, address(settleReceiver), fund);
+        _fundReserves(proxy, address(freezeReceiver), fund);
         vaultA.setFreezeReceiver(address(freezeReceiver));
         vaultB.setFreezeReceiver(address(freezeReceiver));
     }
@@ -249,6 +265,9 @@ contract DeployUnichainSepolia is TenureHookDeployer {
         vm.serializeAddress(o, "tWETH", weth);
         vm.serializeAddress(o, "tUSDC", usdc);
         vm.serializeAddress(o, "settleReceiver", address(settleReceiver));
+        vm.serializeUint(o, "lasnaNonce", lasnaNonce);
+        vm.serializeAddress(o, "expectedFreezeRC", freezeRC);
+        vm.serializeAddress(o, "expectedSettlerRC", settlerRC);
         string memory out = vm.serializeAddress(o, "freezeReceiver", address(freezeReceiver));
         // Only a real broadcast writes <chainId>.json (read by DeployLasna); a simulation never masquerades as one.
         bool live = vm.isContext(VmSafe.ForgeContext.ScriptBroadcast);

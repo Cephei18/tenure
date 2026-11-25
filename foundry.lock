@@ -8,6 +8,9 @@
   "lib/reactive-lib": {
     "rev": "f6990ce3526928d039fec78855b2004ff8d65c9f"
   },
+  "lib/reactive-lib-omni": {
+    "rev": "3ade0dcf1d27e67e5783ef807e73a1b9e0c0cce8"
+  },
   "lib/reactive-test-lib": {
     "rev": "2ff9b2a68ca9956306ec943c10d1c757c1dd1956"
   },
