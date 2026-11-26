@@ -214,7 +214,7 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
 
 ## Frontend: Tenure Lab
 
-**[cephei18.github.io/tenure](https://cephei18.github.io/tenure/)** is a read-only page with no wallet
+**Tenure Lab**, hosted on Vercel, is a read-only page with no wallet
 ([`frontend/`](frontend/README.md)). It has four sections:
 
 - **Live:** pool A's tier and budget, and vault B's `relayFrozen()`, read from Unichain Sepolia. Below them, the

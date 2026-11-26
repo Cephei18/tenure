@@ -3,11 +3,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// Static build for GitHub Pages at https://cephei18.github.io/tenure/ .
+// Static build. Hosted at the domain root ("/", e.g. Vercel) by default; GITHUB_PAGES=true builds for a GitHub
+// Pages project site under /tenure/ (.github/workflows/pages.yml sets it).
 // Data files (docs/results/*.csv, deployments/*.json) are imported straight from the repo root, so the
 // frontend never holds a second, drifting copy: `server.fs.allow` lets the dev server read them.
 export default defineConfig({
-  base: "/tenure/",
+  base: process.env.GITHUB_PAGES === "true" ? "/tenure/" : "/",
   plugins: [react(), tailwindcss()],
   server: { fs: { allow: [".."] } },
   build: {

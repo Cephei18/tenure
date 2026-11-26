@@ -1,0 +1,43 @@
+# Frontend CI on every push / PR touching it or its data: exact-math vector tests, replay-vs-hook test,
+# docs-consistency tests, then a production build (base "/", as on Vercel). No secrets, no deploy.
+name: frontend-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "docs/results/**"
+      - "docs/INCIDENT_REACTIVE.md"
+      - "docs/RESULTS.md"
+      - "README.md"
+      - "deployments/**"
+      - "test/vectors/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "docs/results/**"
+      - "deployments/**"
+      - "test/vectors/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

@@ -1,6 +1,6 @@
 # Tenure Lab
 
-A judge-facing, read-only frontend for Tenure: https://cephei18.github.io/tenure/
+A judge-facing, read-only frontend for Tenure, hosted on Vercel.
 
 No wallet, no keys, no transactions. Every number on the page comes from one of three places:
 1. **The chain:** read-only calls to the deployed contracts on Unichain Sepolia.
@@ -14,10 +14,10 @@ Requires Node 20.
 ```bash
 cd frontend
 npm ci
-npm run dev      # http://localhost:5173/tenure/
+npm run dev      # http://localhost:5173/
 npm test         # TS math vs test/vectors, losses.csv replay vs the hook, timeline vs docs
-npm run build    # static site in dist/ (base path /tenure/)
-npm run preview  # serve dist/ at http://localhost:4173/tenure/
+npm run build    # static site in dist/ (base path "/"; GITHUB_PAGES=true builds for /tenure/)
+npm run preview  # serve dist/ at http://localhost:4173/
 ```
 
 The ABI fragments in `src/abi/` were copied from Foundry's build output. To refresh them after `forge build` at the
@@ -60,6 +60,20 @@ repo root, run `npm run abi`.
 
 ## Deploy
 
-[`.github/workflows/pages.yml`](../.github/workflows/pages.yml) tests, builds and publishes on every push to
-`main` that touches the frontend or its data. It needs no secrets. One-time setup: in the repo, go to Settings →
-Pages → Source and choose "GitHub Actions".
+**Vercel** (the live site): import the repo, set **Root Directory** to `frontend`, and keep the Vite defaults
+(build `npm run build`, output `dist`). No `vercel.json` or environment variables are needed; the base path is `/`.
+The build imports five files from **outside** `frontend/`, which Vercel must include. Its project setting
+"Include files outside the root directory in the Build Step" covers this, and is on by default:
+
+- `docs/results/headline.csv`, `docs/results/sweep.csv`, `docs/results/losses.csv`
+- `deployments/1301.json`, `deployments/5318007.json`
+
+The tests (not the build) also read `test/vectors/*.json`, `README.md`, `docs/RESULTS.md` and
+`docs/INCIDENT_REACTIVE.md`.
+
+**CI:** [`.github/workflows/frontend-ci.yml`](../.github/workflows/frontend-ci.yml) runs `npm test` and
+`npm run build` on every push that touches the frontend or its data.
+
+**GitHub Pages (fallback, manual only):** [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) builds
+with `GITHUB_PAGES=true` (base `/tenure/`) and deploys when started by hand. It needs Settings → Pages → Source:
+"GitHub Actions".

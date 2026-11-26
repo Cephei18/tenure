@@ -1,19 +1,10 @@
-# Builds the Tenure Lab frontend (frontend/) and publishes it to GitHub Pages: https://cephei18.github.io/tenure/
-# No secrets: the site is static and read-only (public RPC, committed data). One-time repo setting:
-# Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+# MANUAL ONLY: builds the Tenure Lab frontend (frontend/) for a GitHub Pages project site under /tenure/.
+# The frontend is hosted on Vercel; this workflow is kept as a fallback and runs only when started by hand
+# (Actions -> pages -> Run workflow), so pushes never produce a failing run while Pages is not configured.
+# Requires Settings -> Pages -> Source: "GitHub Actions". Tests and build on every push: frontend-ci.yml.
 name: pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - "docs/results/**"
-      - "docs/INCIDENT_REACTIVE.md"
-      - "docs/RESULTS.md"
-      - "deployments/**"
-      - "test/vectors/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm test # TS math vs test/vectors (exact), losses.csv replay vs the hook, timeline vs docs
       - run: npm run build
+        env:
+          GITHUB_PAGES: "true" # base path /tenure/ (vite.config.ts)
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
