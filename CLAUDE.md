@@ -99,10 +99,12 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
   Before adding ANY hook code, move more pure math (e.g. RiskBudget.refill) into TenureScorer first.
 - vm.revertToState also reverts the TEST CONTRACT's storage: set loop params (seed, flags) AFTER reverting.
 - Windows: `python3` is not on PATH (Store alias); run `python -m pytest sim -q`.
-- Reactive: src/ uses reactive-lib-omni 3ade0dcf (remap reactive-lib-omni/): 0x8888 calls react() (onlySystem) and
-  bills; the proxy injects the REQUESTING RC (not the deployer) as callback arg 1. Legacy reactive-lib f6990ce
-  (vmOnly, 0xfffFfF) is dead on Lasna: test-only (regression). Tests use test/reactive/utils/ReactiveNetworkSim.sol,
-  NOT reactive-test-lib (it never bills, fakes VM mode). Fund via depositTo (reserves). docs/INCIDENT_REACTIVE.md.
+- Reactive: reactive-lib-omni (pinned 3ade0dc, remap reactive-lib-omni/) replaces legacy reactive-lib f6990ce (test-only regression).
+- Reactive funding: RC reserves via depositTo on 0x8888 (Lasna); receiver reserves via depositTo on the callback proxy. Never a plain transfer.
+- Reactive: the callback proxy injects the REQUESTING RC address as callback arg 1 (not the deployer).
+- Reactive: settler timing uses Lasna block numbers (its own block.number), never Unichain log.block_number.
+- Public Unichain Sepolia RPC limits log queries to 1,000 blocks: chunk cast logs; declare `indexed` params in the signature.
+- Reactive tests use test/reactive/utils/ReactiveNetworkSim.sol, NOT reactive-test-lib (never bills, fakes VM mode). docs/INCIDENT_REACTIVE.md (RESOLVED, live relay 2026-11-26).
 - ACCEPTED (2026-11-26): reactive-lib-omni 3ade0dcf added as a pinned dependency (human decision). Why: it is the
   docs' current base; the pinned legacy lib cannot run on Lasna (react reverts "VM only", pay rejects 0x8888).
 - ACCEPTED: demo vault A cannot RECEIVE relayed freezes (director-owned; freezeReceiver not re-pointable). It still SENDS.

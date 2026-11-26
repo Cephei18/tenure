@@ -99,6 +99,41 @@ flowchart LR
 
 On mainnet the overhead (~$16 per rebalance) fits vaults above about $1M. On a 1-second L2 it is negligible.
 
+## Live on testnet (Unichain Sepolia + Reactive Lasna)
+
+The scripted attack froze the poisoned curator on vault A, and Reactive Network relayed that freeze to vault B on
+its own: vault B's `relayFrozen()` returned `true`, 2 blocks after A's `TierChanged(RESTRICTED -> FROZEN)`.
+Relay tx:
+[`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696)
+(block 68,837,825). The full restore, re-freeze and relay sequence, with every tx, is in
+[`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#live-verification-2026-11-26).
+
+| Contract | Chain | Address | Status |
+|---|---|---|---|
+| `TenureHook` | Unichain Sepolia (1301) | `0xBe78c4327a48414e0C9701a3B5840da39D828A40` | live |
+| Demo vault A (pool `0x159454e0...3cc1ceff`) | 1301 | `0xA1478638E58333e3910aEfCA9616468503FC744B` | live |
+| `DemoDirector` | 1301 | `0x4503973606187A6b0eE288Da074762ca51BE80f1` | live |
+| Chainlink vault B (pool `0x44282028...20113a48`) | 1301 | `0x68d4571Fb9720d26353F643d0B4Bc56E044F442A` | live |
+| `ChainlinkReferencePrice` | 1301 | `0x73D4eCcA7B3E1c093D8c140e0F831D09CA4478B0` | live |
+| `TenureFreezeReceiver` | 1301 | `0x846698c02b01Ea6126deb50705338D812878E5FD` | live |
+| `TenureReactiveReceiver` (settlement) | 1301 | `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0` | live |
+| `TenureFreezeRC` | Lasna (5318007) | [`0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F`](https://lasna.reactscan.net/address/0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F) | live |
+| `TenureSettlerRC` | Lasna (5318007) | [`0xfB5F3B736A5A0b5F244d629D36d876333B3FB646`](https://lasna.reactscan.net/address/0xfB5F3B736A5A0b5F244d629D36d876333B3FB646) | live |
+| `TenureFreezeReceiver` (legacy) | 1301 | `0xd97DdB3dB9A62D43DBd7DfFd29610813d8E53DfD` | legacy: stranded, not in use |
+| `TenureReactiveReceiver` (legacy) | 1301 | `0xcB9Bf92138CBa275F0FAC1e4F2E469AdDAdDb142` | legacy: stranded, not in use |
+| `TenureFreezeRC` (legacy) | Lasna | `0x3f04BD2701541Fb3f0B6E924095435715A9F7150` | legacy: blacklisted, stranded |
+| `TenureSettlerRC` (legacy) | Lasna | `0x19bFfFD599291bE1FfC98B45C6C8F11Ad2BCef10` | legacy: blacklisted, stranded |
+
+Full list: [`deployments/1301.json`](deployments/1301.json), [`deployments/5318007.json`](deployments/5318007.json).
+
+**Lessons learned.** The first live Reactive contracts were blacklisted on their first event. An outdated simulator
+library (`reactive-test-lib`) had kept the tests green while hiding four bugs: the legacy `react()`/`pay()` model
+(the live system contract calls `react()` directly, and the legacy guards rejected it), receivers trusting the
+deployer instead of the requesting RC (the callback proxy injects the RC), the settler comparing Unichain and
+Lasna block numbers, and funding the RC balance instead of its reserves. A live rehearsal caught all four. They
+were fixed on `reactive-lib-omni` and are now tested by a conformance simulator that bills like the real network
+(`test/reactive/utils/ReactiveNetworkSim.sol`).
+
 ## Threat model summary ([`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md))
 
 - **Park-then-follow attack** (the slow bleed static caps miss): caught by the markout. FROZEN after 3 rounds.
@@ -130,7 +165,6 @@ On mainnet the overhead (~$16 per rebalance) fits vaults above about $1M. On a 1
 - Window gaming and alpha inflation are bounded but open (M5.5).
 - Token callbacks (ERC777-style) are not supported. They cannot break the guards, but they can grade the curator
   adversely.
-- Testnet deployment is scripted and dry-run but not yet broadcast.
 - On the testnet deployment, freeze relays run one way only: from the demo vault A to vault B. Vault A is owned by
   its `DemoDirector`, which can only enter safe mode, so A's freeze receiver cannot be re-pointed to the rebuilt
   receiver. A FROZEN on A is relayed to B, but a FROZEN on B does not reach A. Both directions are covered in

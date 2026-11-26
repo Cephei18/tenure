@@ -1,7 +1,38 @@
 # Incident: the Lasna reactive contracts went INACTIVE on their first event (2026-11-25)
 
-**Status:** root cause found and fixed in code (tests and dry runs pass against the live chains). The live
-contracts still need the human steps in "Fix the live deployment".
+**Status: RESOLVED (2026-11-26).** The rebuilt contracts are live, `CheckReactive.s.sol` printed ALL CHECKS
+PASSED, and a fresh FROZEN on vault A was relayed to vault B on Unichain Sepolia (`relayFrozen() == true`). See
+"Live verification" below.
+
+## Live verification (2026-11-26)
+
+After steps 0-3 of "Fix the live deployment" (new receivers on Unichain, new RCs on Lasna, `CheckReactive` ALL
+CHECKS PASSED), the guardian restored vault A and the demo machinery froze it again. The new `TenureFreezeRC`
+relayed that FROZEN to vault B. All txs are on Unichain Sepolia (chain 1301). Steps 1-5 were sent by the deployer
+`0xD9df64Cb859206eECF3761ec4eb5057B579438A2`; the relay was sent by the network through the callback proxy.
+
+| # | Step | Block | Tx | Hook / receiver events |
+|---|---|---:|---|---|
+| 1 | `requestRestore(A)` | 68,836,944 | [`0x1fa6170a...a443ae`](https://sepolia.uniscan.xyz/tx/0x1fa6170ab1c2179ee8a1abdf6a72ebbdb0de6e5655dc29f5bd722efd79a443ae) | `RestoreRequested` |
+| 2 | `restore(A)` (608 blocks later; timelock 600) | 68,837,552 | [`0x2c73d02b...61b2a`](https://sepolia.uniscan.xyz/tx/0x2c73d02bbec5774e33e4247019255435443656faf56fa34aff0037f1d6961b2a) | `TierChanged(A, FROZEN, RESTRICTED)`, `Restored` |
+| 3 | `DemoDirector.tick()`: curator parks | 68,837,588 | [`0x7c07e27e...499af`](https://sepolia.uniscan.xyz/tx/0x7c07e27e289238a25251e461b8cc7510085b60bc52637594fbbf2049dce499af) | rebalance session, `RebalanceScored` |
+| 4 | `DemoDirector.tick()`: attack round | 68,837,703 | [`0x586fd4af...6c1e`](https://sepolia.uniscan.xyz/tx/0x586fd4af5bf18768197530ce3cf411a3649e00238b9470ae65a648f6d7bb6c1e) | `MarkoutSettled`, rebalance session, `RebalanceScored` |
+| 5 | `settleMany(A, [6, 7])` | 68,837,823 | [`0xd31fd9de...69051`](https://sepolia.uniscan.xyz/tx/0xd31fd9de3c171b1d174253ca8d7f5e81c1a4ff36a5be6608ce8629c71d469051) | `MarkoutSettled`, `TierChanged(A, RESTRICTED, FROZEN)` |
+| 6 | Relay: callback proxy -> `TenureFreezeReceiver` -> vault B | 68,837,825 | [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696) | `FreezeRelayed(B, 1301, A)` |
+
+- The relay landed **2 Unichain blocks** after the freeze (Unichain event, Lasna reaction, Unichain callback).
+- Relay tx: from `0xF9F61C1D3325e2d4aBb55dd9e0Db84F7A0D914B0` to the callback proxy
+  `0x775c9B990ADe401060B78D0e98684eEf8d2466C1`. `FreezeRelayed` is emitted by the new receiver
+  `0x846698c02b01Ea6126deb50705338D812878E5FD` with topics vault B `0x68d4571Fb9720d26353F643d0B4Bc56E044F442A`,
+  origin chain `1301` (`0x515`), pool A `0x159454e0f739d43fa36a9bc9ffd1a7018a6847f00d579a80566111f83cc1ceff`.
+- Read back afterwards: `tierOf(A) == 2` (FROZEN), vault B `relayFrozen() == true`.
+- Freeze RC on Lasna:
+  [`0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F`](https://lasna.reactscan.net/address/0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F)
+  (its reaction tx is listed there; its hash is not recorded here). Settler RC:
+  [`0xfB5F3B736A5A0b5F244d629D36d876333B3FB646`](https://lasna.reactscan.net/address/0xfB5F3B736A5A0b5F244d629D36d876333B3FB646).
+- New Unichain receivers: `TenureFreezeReceiver` `0x846698c02b01Ea6126deb50705338D812878E5FD`,
+  `TenureReactiveReceiver` `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0`. The legacy RCs and receivers listed in
+  this document are stranded and no longer used.
 
 ## Summary
 
@@ -102,7 +133,7 @@ No. Do not spend lREACT on them:
 - `script/CheckReactive.s.sol`: read-only post-deploy verification of both chains. Run against today's live
   contracts, it reports 14 failures.
 
-## Fix the live deployment (human, `--account tenure-burner`; nothing here was broadcast)
+## Fix the live deployment (human, `--account tenure-burner`; done 2026-11-26)
 
 Hook, pools, vaults and their funds stay as they are. New: 2 receivers on Unichain and 2 RCs on Lasna. Vault B is
 re-pointed to the new freeze receiver. Vault A is owned by the DemoDirector and keeps the old receiver: A can
@@ -243,8 +274,23 @@ Then watch the relay arrive (it takes about a minute: Unichain event, Lasna reac
 
 ```bash
 cast call 0x68d4571Fb9720d26353F643d0B4Bc56E044F442A "relayFrozen()(bool)" --rpc-url $UNI   # true = B frozen
-cast logs --address $FR "FreezeRelayed(address,uint256,bytes32)" \
-  --from-block $(( $(cast block-number --rpc-url $UNI) - 2000 )) --rpc-url $UNI
+# All three FreezeRelayed parameters are indexed: the signature must say so, or cast cannot decode the log.
+# The public Unichain RPC serves at most 1,000 blocks per log query, so scan the last 3,000 blocks in chunks.
+SIG="FreezeRelayed(address indexed,uint256 indexed,bytes32 indexed)"
+TO=$(cast block-number --rpc-url $UNI)
+for FROM in $(seq $((TO - 2999)) 1000 $TO); do
+  END=$((FROM + 999)); [ $END -gt $TO ] && END=$TO
+  cast logs --address $FR "$SIG" --from-block $FROM --to-block $END --rpc-url $UNI
+done
+```
+
+Live example (one chunk around the 2026-11-26 relay; decodes `param0` = vault B, `param1` = 1301,
+`param2` = pool A):
+
+```bash
+cast logs --address 0x846698c02b01Ea6126deb50705338D812878E5FD \
+  "FreezeRelayed(address indexed,uint256 indexed,bytes32 indexed)" \
+  --from-block 68837000 --to-block 68837999 --rpc-url https://sepolia.unichain.org
 ```
 
 Afterwards, vault B's curator stays blocked until the guardian lifts it:

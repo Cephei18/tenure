@@ -122,6 +122,19 @@ TenureHook: the flag lives in the vault, and the hook size is pinned by `test/Ho
   mode is still allowed), and no funds can move: the relay has no path to tokens, shares, the mandate or the
   budget. A malicious vault owner could point the vault at a hostile receiver, but that receiver can still only
   freeze.
+- **Incident: a stale simulator hid a dead relay (2026-11-25, resolved 2026-11-26).** The first live RCs on Lasna
+  were blacklisted on their first event, so a FROZEN on vault A never reached vault B. Failure mode: liveness
+  only (the relay is fail-safe; no funds or tiers were affected, and the hook's own freeze worked). Four bugs had
+  passed every test because `reactive-test-lib` modelled the retired network: (1) the legacy `react()`/`pay()`
+  model (`vmOnly` reverted when the live system contract `0x8888` called `react()`, and `pay()` rejected it);
+  (2) receivers trusted their deployer, while the callback proxy injects the requesting RC; (3) the settler
+  compared Unichain block numbers with Lasna ones; (4) funding went to the RC balance instead of its reserves.
+  Fix: rebuilt on `reactive-lib-omni` and tested against `test/reactive/utils/ReactiveNetworkSim.sol`, a
+  conformance simulator that bills, blacklists and injects the RC like the live network
+  (`test/reactive/ReactiveConformance.t.sol` replays the incident). Verified live: A re-frozen, `FreezeRelayed`
+  on B 2 blocks later, B `relayFrozen() == true`. Lesson: for a cross-chain dependency, a live rehearsal is part
+  of the test suite; a simulator must be checked against the live network, not against the library it ships
+  with. Full evidence: [`INCIDENT_REACTIVE.md`](INCIDENT_REACTIVE.md).
 
 ## 6. Markout window gaming (M5.2, partly open)
 
