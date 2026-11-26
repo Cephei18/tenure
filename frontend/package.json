@@ -9,9 +9,11 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "abi": "node scripts/extract-abi.mjs"
+    "abi": "node scripts/extract-abi.mjs",
+    "tokens": "vite-node scripts/export-tokens.ts"
   },
   "dependencies": {
+    "lucide-react": "1.70.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "2.15.4",

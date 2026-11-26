@@ -1,0 +1,48 @@
+{
+  "$comment": "Generated from frontend/src/theme/tokens.ts by `npm run tokens`. Do not edit.",
+  "color": {
+    "bg": "#14070c",
+    "surface": "#1f0a12",
+    "surface2": "#2a0f19",
+    "border": "#3d1724",
+    "primary": "#e11d48",
+    "accent": "#f472b6",
+    "soft": "#fbcfe8",
+    "text": "#ffffff",
+    "muted": "#c99aae",
+    "full": "#4ade80",
+    "restricted": "#fbbf24",
+    "frozen": "#e11d48",
+    "runA": "#4ade80",
+    "runB": "#fbbf24",
+    "runC": "#f472b6"
+  },
+  "font": {
+    "sans": "Inter, ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  },
+  "space": [
+    0,
+    4,
+    8,
+    12,
+    16,
+    24,
+    32,
+    48,
+    64,
+    96
+  ],
+  "radius": {
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "full": 9999
+  },
+  "motion": {
+    "fast": 150,
+    "base": 300,
+    "slow": 700,
+    "easing": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+  }
+}

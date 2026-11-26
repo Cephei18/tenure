@@ -21,16 +21,35 @@ npm run preview  # serve dist/ at http://localhost:4173/
 ```
 
 The ABI fragments in `src/abi/` were copied from Foundry's build output. To refresh them after `forge build` at the
-repo root, run `npm run abi`.
+repo root, run `npm run abi`. `npm run tokens` re-exports the design tokens (below).
 
-## What each section proves
+URL options: `?demo=1` starts the demo tour on load (for screen recording); `?tune=1` opens the Tune drawer;
+`?rpc=<url>` picks the Unichain Sepolia RPC.
 
-| Section | Shows | Source |
+## Sections: what the user can do
+
+| Section | The user can | Data |
 |---|---|---|
-| **Live** | Pool A's tier and budget, vault B's `relayFrozen()`, vault A's remaining shares and the demo counters, read from the deployed contracts. Below that, a timeline of the proven live sequence (restore, re-freeze, Lasna reaction, relay, full exit while FROZEN), linked to Uniscan and Reactscan. | viem `readContract` against `https://sepolia.unichain.org`, with 3 retries. The RPC can be changed in the page or with `?rpc=<url>`. If the RPC fails, the page shows the last values recorded in [`src/data/live-snapshot.json`](src/data/live-snapshot.json) behind a banner. Addresses come from `deployments/*.json`. The timeline is built from `docs/INCIDENT_REACTIVE.md` and `docs/RESULTS.md`. |
-| **Replay** | The headline scenario, animated: runs A (honest), B (static caps) and C (Tenure), with NAV, budget, tiers, and markers for the poisoning, attack rounds, RESTRICTED and FROZEN. Below it, the 20-seed sweep. The headline numbers (20/20 frozen, honest curator never restricted, 59% less median attacker profit) are computed exactly from the CSVs and rounded half up, the rule stated in `docs/RESULTS.md`. | `docs/results/headline.csv`, `sweep.csv`, `losses.csv` |
-| **Playground** | The poisoned curator's real per-decision losses, re-scored with your risk-budget parameters. It shows when the curator would freeze, how many decisions it still makes, the total loss charged, whether the honest run would be falsely restricted, and a comparison with a static per-action cap. | `docs/results/losses.csv` (exported by `test/scenario/LossesExport.t.sol`) and the RiskBudget port |
-| **Math** | Drag a new range and move the pool and fair prices to see holdings, NAV at the fair price, immediate leakage and markout alpha against doing nothing. | Ports of PositionValue and DecisionScore |
+| **Overview** | See the pitch and three live tiles: vault A's tier, a budget gauge with the 20% / 50% thresholds, vault B's `relayFrozen()`. "Run the attack" jumps to the Simulator and plays B vs C; "Watch demo mode" starts the tour. | viem reads of the deployed hook and vaults |
+| **Simulator** | Pick a scenario (honest, poisoned + static caps, poisoned + Tenure) or **Compare B vs C** side by side. Play, pause, scrub (markers for poisoning, attack rounds, RESTRICTED, FROZEN), 1x / 2x / 4x. Watch the budget ring, tier badge, NAV line, charged-loss counter and event toasts ("Attack round 2 · vault leaks 91.7 at once"). Open **Tune Tenure** to change bucket size, refill time, thresholds and a static cap: the real losses are re-scored live ("Freezes after 9 of 52 decisions · loss 2,471 vs 8,376"). Below: the 20-market sweep and three headline numbers. | `docs/results/headline.csv`, `losses.csv`, `sweep.csv`; RiskBudget port |
+| **Live proof** | Follow the 8 proven steps (Unichain → Lasna → Unichain → withdraw), each with one line and an explorer link; read "read from chain at block N"; refresh; change the RPC. Falls back to the last recorded values behind a banner when the RPC is down. | viem reads; `src/data/timeline.ts` (every hash checked against the docs); `src/data/live-snapshot.json` |
+| **How grading works** | Drag a liquidity range (or its edges, also with arrow keys), move the fair price, the pool price at the decision and the price W blocks later. Three tiles: holdings value, leakage, markout vs did nothing, each with a one-line meaning. **Show the math** reveals the formulas with exact wei values. | Ports of PositionValue and DecisionScore; `src/math/example.ts` builds the rebalance |
+| **Demo mode** | A ~75 s scripted tour: spotlight + caption bar, plays B vs C through the freeze, the sweep, the live relay and the withdrawal. Pause, skip, exit (Esc). | Same data; captions' numbers are tested against it |
+
+Honesty notes: the Simulator's counter is the **loss the hook charged to the curator** (from the recorded scoring
+events); the scenario does not record per-round attacker profit, so the page does not show one. Toasts quote each
+round's immediate leakage as charged by the hook.
+
+## Design system
+
+All tokens live in [`src/theme/tokens.ts`](src/theme/tokens.ts) (colours, fonts, spacing, radii, motion), mirrored as
+CSS variables in `src/index.css` and exported to [`docs/design-tokens.json`](../docs/design-tokens.json) for the
+slide deck (`npm run tokens`). `tokens.test.ts` fails if the CSS or the JSON drift, and checks WCAG AA contrast of
+every text colour on every surface. Tier colours: FULL `#4ade80`, RESTRICTED `#fbbf24`, FROZEN `#e11d48`.
+Motion is wall-clock driven (keeps time in background tabs and screen recorders) and is disabled under
+`prefers-reduced-motion`. Icons: `lucide-react` (pinned).
+
+Screenshots of every section at 1440 px and 390 px, and of demo mode mid-run, are in [`screenshots/`](screenshots/).
 
 ## Correctness
 
@@ -53,9 +72,16 @@ repo root, run `npm run abi`.
   must equal the hook's own emitted budget and tier exactly (and bMax, for markouts). It also checks that run C
   freezes at block 170 and that the attack-round rule reproduces the scenario's counters (25 and 3).
 - `src/lib/timeline.test.ts` fails if any transaction hash or block in the timeline is missing from the committed
-  docs.
+  docs, if the "2 blocks later" relay delay disagrees with them, or if an explorer link is malformed.
+- `src/lib/sim.test.ts` checks the Simulator's events (rounds, RESTRICTED, FROZEN), the charged-loss counter and
+  the Tune re-scoring: defaults freeze after 9 of 52 decisions at block 170, a bigger bucket never freezes earlier,
+  FROZEN is sticky, and the static-cap comparison.
+- `src/lib/stats.test.ts` checks that the sweep medians shown equal those quoted in `README.md` and `docs/RESULTS.md`.
+- `src/sections/demoScript.test.ts` checks the tour length (60-90 s), caption length, spotlight targets, that the
+  captions land on their events, and that every number in a caption comes from the data.
+- `src/math/example.test.ts` checks the worked example (no leakage at fair; leakage grows with the price push).
 - **Display only:** float conversions (tokens, percentages, decimal prices). All scoring stays in BigInt.
-- **Not vector-checked:** the Math section's sizing helpers (`src/math/liquidity.ts`: LiquidityAmounts and an
+- **Not vector-checked:** the grading example's sizing helpers (`src/math/liquidity.ts`: LiquidityAmounts and an
   idealized swap at spot). They only build the example; they are not part of Tenure's scoring.
 
 ## Deploy
