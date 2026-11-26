@@ -221,7 +221,7 @@ def live_budget():
     poison = 20
     restricted = next(x for x, k in zip(t, tier) if k == 1)
     frozen = next(x for x, k in zip(t, tier) if k == 2)
-    W, H = 852, 300  # slide 8 grid cell
+    W, H = 852, 300  # slide 9 grid cell
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
     ax = fig.add_axes([0.075, 0.12, 0.91, 0.72])
     fig.text(0.075, 0.93, "Vault A risk budget, live on Unichain Sepolia (director Tick events, ticks 1–90)",

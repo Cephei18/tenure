@@ -53,6 +53,34 @@ def notes_from_html() -> list[str]:
     return out
 
 
+CODE_STYLE = {  # deck.html .code span classes -> (colour key, bold, italic)
+    "k": ("accent", False, False), "f": ("text", True, False), "b": ("full", True, False),
+    "e": ("text", True, False), "n": ("text", False, False), "c": ("muted", False, True), "": ("soft", False, False)}
+
+
+def blend(fg: str, bg: str, a: float) -> str:
+    f, b = rgb(fg), rgb(bg)
+    return "#" + "".join(f"{round(b[i] + (f[i] - b[i]) * a):02X}" for i in range(3))
+
+
+def slide6_from_html():
+    """The code panels of slide 6, parsed from deck.html (the single source of the excerpts).
+    Returns (panels, size_text, size_pct); a panel is a list of (line_no, css_class, badge, [(text, style)])."""
+    src = (SLIDES / "deck.html").read_text(encoding="utf-8")
+    sec = re.search(r'<section class="slide s6">(.*?)</section>', src, flags=re.S).group(1)
+    panels = []
+    for body in re.findall(r'<div class="code"[^>]*>(.*?)\n    </div>', sec, flags=re.S):
+        lines = []
+        for cls, no, code, badge in re.findall(
+                r'<div class="l ?([^"]*)"><i>(\d*)</i><code>(.*?)</code>(?:<b class="cn">(\d)</b>)?</div>', body):
+            runs = [(html.unescape(m.group(2) if m.group(1) else m.group(3)), m.group(1) or "")
+                    for m in re.finditer(r'<span class="(\w+)">(.*?)</span>|([^<]+)', code)]
+            lines.append((no, cls, badge, runs))
+        panels.append(lines)
+    size = re.search(r'<b>([\d,]+ B)</b></div><div class="bar"><i style="width:([\d.]+)%"', sec)
+    return panels, size.group(1), float(size.group(2))
+
+
 class Deck:
     def __init__(self):
         self.prs = Presentation()
@@ -261,7 +289,67 @@ def build():
         d.box(s, x, 768, 470, 108, fill=C["surface"], line=C["border"])
         d.text(s, x + 28, 768, 430, 108, [[("✓  ", C["full"], True, 30), (t, txt, True, 26)]], 26, anchor=MSO_ANCHOR.MIDDLE)
 
-    # 6 reactive
+    # 6 inside the hook (geometry measured from deck.html at 1920x1080)
+    s = d.slide()
+    d.text(s, 96, 116, 1728, 80, "Three permissions, every move measured", 60, txt, True, line_spacing=1.0)
+    k = d.text(s, 96, 84, 1728, 34, [[("INSIDE THE HOOK · ", acc, True), ("src/TenureHook.sol", acc, True)]], 22)
+    k.text_frame.paragraphs[0].runs[0]._r.get_or_add_rPr().set("spc", "350")
+    panels, size_txt, size_pct = slide6_from_html()
+    mono = "Consolas"
+    for (py, lines) in zip((214, 532), panels):
+        d.box(s, 96, py, 1236, 302, fill=C["surface"], line=C["border"], name="code panel")
+        for i, (no, cls, badge, runs) in enumerate(lines):
+            y = py + 16 + i * 30
+            if cls:
+                band = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, E(98), E(y), E(1232), E(30))
+                band.fill.solid(); band.line.fill.background(); band.shadow.inherit = False
+                band.fill.fore_color.rgb = rgb(blend(C["primary"], C["surface"], .18) if cls == "hl" else blend(C["accent"], C["surface"], .12))
+                bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, E(98), E(y), E(4), E(30))
+                bar.fill.solid(); bar.line.fill.background(); bar.shadow.inherit = False
+                bar.fill.fore_color.rgb = rgb(C["primary"] if cls == "hl" else acc)
+            if badge:
+                o = s.shapes.add_shape(MSO_SHAPE.OVAL, E(114), E(y + 1), E(28), E(28))
+                o.fill.solid(); o.fill.fore_color.rgb = rgb(C["primary"]); o.line.fill.background(); o.shadow.inherit = False
+                d.text(s, 114, y + 1, 28, 28, badge, 17, txt, True, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+            if no:
+                t = d.text(s, 142, y, 50, 30, no, 18, muted, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+                t.text_frame.paragraphs[0].runs[0].font.name = mono
+            tb = d.text(s, 214, y, 1110, 30, [[(t, C[CODE_STYLE[k][0]], CODE_STYLE[k][1]) for t, k in runs]], 22,
+                        anchor=MSO_ANCHOR.MIDDLE, name=f"code line {no}")
+            tb.text_frame.word_wrap = False
+            for r, (_, k) in zip(tb.text_frame.paragraphs[0].runs, runs):
+                r.font.name = mono
+                r.font.italic = CODE_STYLE[k][2]
+    callouts = [(214, 238, "1", "Three permissions, encoded in the address", None),
+                (532, 168, "2", "No unmeasured moves", "Before-liquidity callbacks revert if the vault acts outside a session."),
+                (716, 140, "3", "Grading rides on swaps", "afterSwap settles due records, at most one per swap: keeper-free.")]
+    for y, h, num, head, body in callouts:
+        d.box(s, 1356, y, 468, h, fill=C["surface"], line=C["border"])
+        o = s.shapes.add_shape(MSO_SHAPE.OVAL, E(1378), E(y + 22), E(40), E(40))
+        o.fill.solid(); o.fill.fore_color.rgb = rgb(C["primary"]); o.line.fill.background(); o.shadow.inherit = False
+        d.text(s, 1378, y + 22, 40, 40, num, 22, txt, True, align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+        d.text(s, 1434, y + 22, 372, 70, head, 26, txt, True, line_spacing=1.05)
+        if body:
+            d.text(s, 1434, y + 58, 372, 80, body, 21, soft, line_spacing=1.2)
+    bits = [[("0x…8A40", txt, True), (" → low bits ", muted, False), ("0x0A40", txt, True)],
+            [("  = ", muted, False), ("0x800", soft, False), (" beforeAddLiquidity", muted, False)],
+            [("  | ", muted, False), ("0x200", soft, False), (" beforeRemoveLiquidity", muted, False)],
+            [("  | ", muted, False), ("0x40 ", soft, False), (" afterSwap", muted, False)]]
+    for i, para in enumerate(bits):
+        tb = d.text(s, 1434, 326 + i * 30, 380, 30, [para], 20, anchor=MSO_ANCHOR.MIDDLE)
+        tb.text_frame.word_wrap = False
+        for r in tb.text_frame.paragraphs[0].runs:
+            r.font.name = mono
+    d.box(s, 96, 876, 1728, 81, fill=C["surface2"], line=acc)
+    d.text(s, 124, 876, 1210, 81, [[("Scoring math lives in the linked ", soft, False), ("TenureScorer", txt, True),
+                                    (" library to keep the hook under the ", soft, False), ("24,576-byte", txt, True),
+                                    (" limit.", soft, False)]], 23, anchor=MSO_ANCHOR.MIDDLE)
+    d.text(s, 1366, 890, 300, 30, "TenureHook (deploy profile)", 20, muted, anchor=MSO_ANCHOR.MIDDLE)
+    d.text(s, 1596, 888, 200, 32, size_txt, 24, txt, True, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+    d.box(s, 1366, 929, 430, 12, fill=C["border"], r=6, name="size bar")
+    d.box(s, 1366, 929, 430 * size_pct / 100, 12, fill=acc, r=6, name="hook size")
+
+    # 7 reactive
     s = d.slide()
     d.kicker_title(s, "Reactive Network", "Two problems a single chain can't solve")
     rows = [("Problem 1", "Grades are due 50 blocks later. Settling inside a swap cost that trader ~146k extra gas.",
@@ -281,7 +369,7 @@ def build():
     d.text(s, 96, 562, 1600, 34, [[("PROOF, LIVE ON TESTNET   ", acc, True, 22), ("vault A froze → Lasna reacted → vault B froze", muted, False, 22)]], 22)
     d.image(s, A / "E_relay_timeline.png", 160, 606, w=1600, alt="Relay timeline: 68,837,823 -> Lasna 9,291,302 -> 68,837,825: 2 blocks, ~2 seconds.")
 
-    # 7 chainlink + unichain
+    # 8 chainlink + unichain
     s = d.slide()
     d.kicker_title(s, "Chainlink + Unichain", "A fair price, and a cheap place to grade")
     d.text(s, 96, 222, 860, 40, "Chainlink", 30, txt, True)
@@ -304,7 +392,7 @@ def build():
         d.text(s, x + 18, 888, 250, 28, lab, 19, muted)
     d.image(s, A / "A_architecture.png", 1012, 232, w=800, alt="Architecture diagram.")
 
-    # 8 live demo: 2x2 grid of 852 px cells (same geometry as deck.html)
+    # 9 live demo: 2x2 grid of 852 px cells (same geometry as deck.html)
     s = d.slide()
     d.kicker_title(s, "Live demo · Unichain Sepolia + Reactive Lasna", "The attack, live on testnet")
     d.text(s, 1224, 132, 600, 44, "https://tenure-hazel.vercel.app/", 30, acc, True, align=PP_ALIGN.RIGHT,
@@ -321,7 +409,7 @@ def build():
     d.shot(s, A / "H_lab_live_steps.png", 96, 618, 852, alt="Tenure Lab live proof: the 8 proven steps, relay to vault B 2 blocks later.")
     d.image(s, A / "D_live_budget.png", 972, 618, w=852, alt="Vault A budget per tick, live Tick events: poisoned 20, RESTRICTED 23, FROZEN 25.")
 
-    # 9 results
+    # 10 results
     s = d.slide()
     d.kicker_title(s, "Results", "Same attack, with and without Tenure")
     for i, (big, lab, col) in enumerate((("20/20", ["attack runs", "frozen"], C["primary"]),
@@ -338,7 +426,7 @@ def build():
                                    ("1,992", txt, True), (" vectors · ", soft, False), ("7", txt, True),
                                    (" invariants, ", soft, False), ("128,000", txt, True), (" random calls", soft, False)]], 25)
 
-    # 10 close
+    # 11 close
     s = d.slide()
     d.kicker_title(s, "Tenure", "Autonomy that has to be earned")
     cols = [("Scorecards", "tell you after the damage.", 0, 514, False), ("Guardians", "need someone awake.", 542, 514, False),

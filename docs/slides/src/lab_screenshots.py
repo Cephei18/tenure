@@ -1,4 +1,4 @@
-"""Capture the live Tenure Lab for slide 8 (asset H) with headless Chrome/Edge over the DevTools protocol.
+"""Capture the live Tenure Lab for slide 9 (asset H) with headless Chrome/Edge over the DevTools protocol.
 
     python docs/slides/src/lab_screenshots.py [url]        # default https://tenure-hazel.vercel.app/
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tenure · UHI11</title>
-<!-- Tenure UHI11 demo-video deck. 10 slides at 1920x1080. Keys: arrows / space / PageUp-Down, Home, End,
+<!-- Tenure UHI11 demo-video deck. 11 slides at 1920x1080. Keys: arrows / space / PageUp-Down, Home, End,
      N = speaker notes, F = fullscreen. #3 in the URL opens slide 3. Print (Ctrl+P) gives one slide per page.
      Numbers: see docs/slides/README.md ("Where every number comes from"). Colours: docs/design-tokens.json. -->
 <style>
@@ -20,7 +20,7 @@
 html, body { background: #000; height: 100%; overflow: hidden; }
 body { font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--text);
   -webkit-font-smoothing: antialiased; }
-.s9 .bigs b, .s7 .n b { font-variant-numeric: tabular-nums; }
+.s10 .bigs b, .s8 .n b { font-variant-numeric: tabular-nums; }
 #stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
 .slide { position: absolute; inset: 0; width: 1920px; height: 1080px; padding: 84px 96px 0; background: var(--bg);
   display: none; overflow: hidden; }
@@ -93,7 +93,43 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 .s5 .why .it { flex: 1; padding: 22px 26px; font-size: 26px; font-weight: 600; display: flex; gap: 16px; align-items: center; }
 .tick { color: var(--full); font-weight: 800; font-size: 30px; }
 
-/* 6 / 7 problem -> solution */
+/* 6 inside the hook */
+.s6 .wrap { display: grid; grid-template-columns: 1236px 468px; gap: 16px 24px; margin-top: 26px; align-items: start; }
+.code { position: relative; background: var(--surface); border: 2px solid var(--border); border-radius: 16px; padding: 14px 20px;
+  font-family: Consolas, "Cascadia Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 22px; line-height: 30px;
+  color: var(--soft); overflow: hidden; }
+.code .l { display: flex; align-items: center; height: 30px; margin: 0 -20px; padding: 0 20px; white-space: pre; }
+.code .l.hl { background: rgba(225,29,72,.18); box-shadow: inset 4px 0 var(--primary); }
+.code .l.hl2 { background: rgba(244,114,182,.12); box-shadow: inset 4px 0 var(--accent); }
+.code i { font-style: normal; width: 50px; flex: none; text-align: right; margin-right: 22px; color: var(--muted); font-size: 18px; order: 1; }
+.code code { font: inherit; order: 2; }
+.code .cn { order: 0; flex: none; width: 28px; height: 28px; margin-left: -4px; border-radius: 50%; background: var(--primary); color: var(--text);
+  font-family: Inter, sans-serif; font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.code .l:not(:has(.cn)) i { margin-left: 24px; }
+.code .k { color: var(--accent); }
+.code .f { color: var(--text); font-weight: 700; }
+.code .b { color: var(--full); font-weight: 700; }
+.code .e { color: var(--text); font-weight: 700; }
+.code .n { color: var(--text); }
+.code .c { color: var(--muted); font-style: italic; }
+.s6 .co { display: flex; gap: 16px; align-items: flex-start; padding: 20px 22px; }
+.s6 .co + .co { margin-top: 16px; }
+.s6 .co .num { flex: none; width: 40px; height: 40px; font-size: 22px; }
+.s6 .co b { display: block; font-size: 26px; font-weight: 800; line-height: 1.2; }
+.s6 .co .d { display: block; font-size: 21px; color: var(--soft); line-height: 1.35; margin-top: 8px; }
+.s6 .bits { margin-top: 12px; font-family: Consolas, "Cascadia Mono", ui-monospace, Menlo, monospace; font-size: 20px; line-height: 30px; color: var(--soft); white-space: pre; }
+.s6 .bits em { font-style: normal; color: var(--text); font-weight: 700; }
+.s6 .bits .m { color: var(--muted); }
+.s6 .strip { margin-top: 20px; display: flex; align-items: center; gap: 28px; padding: 14px 28px; background: var(--surface2); border-color: var(--accent); }
+.s6 .strip .t { flex: 1; font-size: 23px; color: var(--soft); line-height: 1.3; }
+.s6 .strip .t b { color: var(--text); }
+.s6 .strip .sz { flex: none; width: 430px; }
+.s6 .strip .sz div { display: flex; justify-content: space-between; font-size: 20px; color: var(--muted); }
+.s6 .strip .sz div b { color: var(--text); font-size: 24px; font-variant-numeric: tabular-nums; }
+.s6 .strip .bar { height: 12px; border-radius: 6px; background: var(--border); margin-top: 8px; overflow: hidden; }
+.s6 .strip .bar i { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+
+/* 7 / 8 problem -> solution */
 .ps { display: grid; grid-template-columns: 1fr 64px 1fr; align-items: stretch; }
 .ps .p, .ps .s { padding: 22px 28px; }
 .ps .p { background: var(--surface); border: 2px solid var(--border); border-radius: 16px; }
@@ -103,53 +139,53 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 .ps .t { font-size: 29px; font-weight: 600; line-height: 1.28; margin-top: 8px; }
 .ps .t small { display: block; font-size: 21px; font-weight: 400; color: var(--muted); margin-top: 6px; }
 .ps .ar { display: flex; align-items: center; justify-content: center; font-size: 40px; color: var(--accent); }
-.s6 .ps { margin-top: 22px; }
-.s6 .ps:first-of-type { margin-top: 40px; }
-.s6 .proof { margin-top: 30px; display: flex; align-items: baseline; gap: 20px; }
-.s6 .proof b { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
-.s6 .proof span { font-size: 22px; color: var(--muted); }
-.s6 .relay { width: 1600px; margin: 6px 0 0 64px; }
-.s7 .wrap { display: grid; grid-template-columns: 860px 1fr; gap: 48px; margin-top: 30px; }
-.s7 .blk + .blk { margin-top: 26px; }
-.s7 .who { font-size: 30px; font-weight: 800; margin-bottom: 12px; }
-.s7 .ps { grid-template-columns: 1fr; gap: 12px; }
-.s7 .ps .ar { display: none; }
-.s7 .nums { display: flex; gap: 14px; margin-top: 10px; }
-.s7 .sol { font-size: 19px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-top: 18px; }
-.s7 .n { flex: 1; padding: 14px 18px; }
-.s7 .n b { display: block; font-size: 36px; font-weight: 800; }
-.s7 .n span { font-size: 19px; color: var(--muted); }
-.s7 .arch { width: 812px; margin-top: 6px; }
+.s7 .ps { margin-top: 22px; }
+.s7 .ps:first-of-type { margin-top: 40px; }
+.s7 .proof { margin-top: 30px; display: flex; align-items: baseline; gap: 20px; }
+.s7 .proof b { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.s7 .proof span { font-size: 22px; color: var(--muted); }
+.s7 .relay { width: 1600px; margin: 6px 0 0 64px; }
+.s8 .wrap { display: grid; grid-template-columns: 860px 1fr; gap: 48px; margin-top: 30px; }
+.s8 .blk + .blk { margin-top: 26px; }
+.s8 .who { font-size: 30px; font-weight: 800; margin-bottom: 12px; }
+.s8 .ps { grid-template-columns: 1fr; gap: 12px; }
+.s8 .ps .ar { display: none; }
+.s8 .nums { display: flex; gap: 14px; margin-top: 10px; }
+.s8 .sol { font-size: 19px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-top: 18px; }
+.s8 .n { flex: 1; padding: 14px 18px; }
+.s8 .n b { display: block; font-size: 36px; font-weight: 800; }
+.s8 .n span { font-size: 19px; color: var(--muted); }
+.s8 .arch { width: 812px; margin-top: 6px; }
 
-/* 8 demo */
-.s8 .grid { display: grid; grid-template-columns: 852px 852px; gap: 20px 24px; margin-top: 26px; align-items: start; }
+/* 9 demo */
+.s9 .grid { display: grid; grid-template-columns: 852px 852px; gap: 20px 24px; margin-top: 26px; align-items: start; }
 .shot { border: 2px solid var(--border); border-radius: 12px; overflow: hidden; }
-.s8 .url { text-decoration: none; position: absolute; right: 96px; top: 136px; font-size: 30px; font-weight: 700; color: var(--accent); }
-.s8 .beats { margin-top: 18px; }
-.s8 .beat { display: flex; gap: 14px; align-items: center; font-size: 27px; font-weight: 600; height: 40px; }
-.s8 .beat .d { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.s9 .url { text-decoration: none; position: absolute; right: 96px; top: 136px; font-size: 30px; font-weight: 700; color: var(--accent); }
+.s9 .beats { margin-top: 18px; }
+.s9 .beat { display: flex; gap: 14px; align-items: center; font-size: 27px; font-weight: 600; height: 40px; }
+.s9 .beat .d { width: 14px; height: 14px; border-radius: 50%; flex: none; }
 
-/* 9 results */
-.s9 .bigs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 34px; }
-.s9 .bigs .card { padding: 20px 30px; display: flex; align-items: baseline; gap: 20px; }
-.s9 .bigs b { font-size: 68px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
-.s9 .bigs span { font-size: 25px; color: var(--soft); line-height: 1.25; }
-.s9 .charts { display: grid; grid-template-columns: 840px 840px; gap: 48px; margin-top: 40px; }
-.s9 .rigor { margin-top: 30px; font-size: 25px; color: var(--soft); }
-.s9 .rigor b { color: var(--text); }
+/* 10 results */
+.s10 .bigs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 34px; }
+.s10 .bigs .card { padding: 20px 30px; display: flex; align-items: baseline; gap: 20px; }
+.s10 .bigs b { font-size: 68px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+.s10 .bigs span { font-size: 25px; color: var(--soft); line-height: 1.25; }
+.s10 .charts { display: grid; grid-template-columns: 840px 840px; gap: 48px; margin-top: 40px; }
+.s10 .rigor { margin-top: 30px; font-size: 25px; color: var(--soft); }
+.s10 .rigor b { color: var(--text); }
 
-/* 10 close */
-.s10 .cols { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 28px; margin-top: 80px; }
-.s10 .card { min-height: 330px; }
-.s10 .card { padding: 36px 36px 40px; }
-.s10 .card .w { font-size: 24px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-.s10 .card b { display: block; font-size: 50px; font-weight: 800; line-height: 1.15; margin-top: 18px; }
-.s10 .card.t { border-color: var(--primary); background: var(--surface2); }
-.s10 .card.t .w { color: var(--accent); }
-.s10 .links { margin-top: 96px; display: flex; gap: 64px; font-size: 36px; font-weight: 700; }
-.s10 .links span { color: var(--muted); font-weight: 400; font-size: 24px; display: block; margin-bottom: 6px; letter-spacing: .14em; text-transform: uppercase; }
-.s10 .links a { color: inherit; text-decoration: none; }
-.s10 .thanks { margin-top: 64px; font-size: 30px; color: var(--soft); }
+/* 11 close */
+.s11 .cols { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 28px; margin-top: 80px; }
+.s11 .card { min-height: 330px; }
+.s11 .card { padding: 36px 36px 40px; }
+.s11 .card .w { font-size: 24px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.s11 .card b { display: block; font-size: 50px; font-weight: 800; line-height: 1.15; margin-top: 18px; }
+.s11 .card.t { border-color: var(--primary); background: var(--surface2); }
+.s11 .card.t .w { color: var(--accent); }
+.s11 .links { margin-top: 96px; display: flex; gap: 64px; font-size: 36px; font-weight: 700; }
+.s11 .links span { color: var(--muted); font-weight: 400; font-size: 24px; display: block; margin-bottom: 6px; letter-spacing: .14em; text-transform: uppercase; }
+.s11 .links a { color: inherit; text-decoration: none; }
+.s11 .thanks { margin-top: 64px; font-size: 30px; color: var(--soft); }
 
 @page { size: 1920px 1080px; margin: 0; }
 @media print {
@@ -279,6 +315,53 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 
 <!-- 6 -->
 <section class="slide s6">
+  <div class="kicker">Inside the hook &middot; <span style="text-transform:none;letter-spacing:.04em">src/TenureHook.sol</span></div>
+  <h2>Three permissions, every move measured</h2>
+  <div class="wrap">
+    <div class="code" aria-label="src/TenureHook.sol: getHookPermissions and the session entry points">
+      <div class="l"><i>242</i><code><span class="k">function</span> <span class="f">getHookPermissions</span>() <span class="k">public</span> <span class="k">pure</span> <span class="k">override</span> <span class="k">returns</span> (Hooks.Permissions <span class="k">memory</span>) {</code><b class="cn">1</b></div>
+      <div class="l"><i>243</i><code>    <span class="k">return</span> Hooks.Permissions({</code></div>
+      <div class="l"><i>246</i><code>        beforeAddLiquidity: <span class="b">true</span>,</code></div>
+      <div class="l"><i>248</i><code>        beforeRemoveLiquidity: <span class="b">true</span>,</code></div>
+      <div class="l"><i>251</i><code>        afterSwap: <span class="b">true</span>,</code></div>
+      <div class="l"><i></i><code>        <span class="c">// ... the other 11 permissions: false</span></code></div>
+      <div class="l"><i>349</i><code><span class="k">function</span> <span class="f">beginRebalance</span>(PoolKey <span class="k">calldata</span> key) <span class="k">external</span> onlyVault(key.toId()) {</code></div>
+      <div class="l"><i>366</i><code><span class="k">function</span> <span class="f">endRebalance</span>(PoolKey <span class="k">calldata</span> key) <span class="k">external</span> onlyVault(key.toId())</code></div>
+      <div class="l"><i></i><code>    <span class="k">returns</span> (<span class="k">uint256</span> recordId) {</code></div>
+    </div>
+    <div class="card co"><span class="num">1</span><div><b>Three permissions, encoded in the address</b>
+      <div class="bits"><em>0x…8A40</em> <span class="m">&#8594; low bits</span> <em>0x0A40</em>
+  <span class="m">=</span> 0x800 <span class="m">beforeAddLiquidity</span>
+  <span class="m">|</span> 0x200 <span class="m">beforeRemoveLiquidity</span>
+  <span class="m">|</span> 0x40  <span class="m">afterSwap</span></div></div></div>
+    <div class="code" aria-label="src/TenureHook.sol: liquidity callbacks and afterSwap">
+      <div class="l"><i>530</i><code><span class="k">function</span> <span class="f">_beforeRemoveLiquidity</span>(</code></div>
+      <div class="l"><i></i><code>    <span class="c">// ...</span></code></div>
+      <div class="l"><i>537</i><code>    <span class="k">if</span> (sender == configs[id].vault) {</code></div>
+      <div class="l hl"><i>539</i><code>        <span class="k">if</span> (_session(id) == SESSION_NONE) <span class="k">revert</span> <span class="e">Tenure__NoSession</span>();</code><b class="cn">2</b></div>
+      <div class="l"><i></i><code>    <span class="c">// ... _beforeAddLiquidity: same revert, line 524</span></code></div>
+      <div class="l"><i>549</i><code><span class="k">function</span> <span class="f">_afterSwap</span>(<span class="k">address</span>, PoolKey <span class="k">calldata</span> key,</code></div>
+      <div class="l"><i></i><code>    SwapParams <span class="k">calldata</span>, BalanceDelta, <span class="k">bytes</span> <span class="k">calldata</span>)</code></div>
+      <div class="l hl2"><i>555</i><code>    <span class="k">if</span> (configs[id].vault != <span class="k">address</span>(<span class="n">0</span>) &amp;&amp; _session(id) == SESSION_NONE) _autoSettle(id);</code><b class="cn">3</b></div>
+      <div class="l"><i>109</i><code><span class="k">uint256</span> <span class="k">public</span> <span class="k">constant</span> MAX_AUTO_SETTLE = <span class="n">1</span>;</code></div>
+    </div>
+    <div>
+      <div class="card co"><span class="num">2</span><div><b>No unmeasured moves</b><span class="d">Before-liquidity callbacks revert if the vault acts outside a session.</span></div></div>
+      <div class="card co"><span class="num">3</span><div><b>Grading rides on swaps</b><span class="d">afterSwap settles due records, at most one per swap: keeper-free.</span></div></div>
+    </div>
+  </div>
+  <div class="card strip">
+    <div class="t">Scoring math lives in the linked <b>TenureScorer</b> library to keep the hook under the <b>24,576-byte</b> limit.</div>
+    <div class="sz"><div><span>TenureHook (deploy profile)</span><b>22,528 B</b></div><div class="bar"><i style="width:91.67%"></i></div></div>
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>6</span></div>
+  <aside class="notes"><ul>
+    <li>Three permissions in the address; before-liquidity blocks unmeasured moves; afterSwap settles grades; only a hook sits inside the pool and sees every move.</li>
+  </ul></aside>
+</section>
+
+<!-- 7 -->
+<section class="slide s7">
   <div class="kicker">Reactive Network</div>
   <h2>Two problems a single chain can't solve</h2>
   <div class="ps">
@@ -293,7 +376,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
   </div>
   <div class="proof"><b>Proof, live on testnet</b><span>vault A froze &#8594; Lasna reacted &#8594; vault B froze</span></div>
   <img class="relay" src="assets/E_relay_timeline.png" alt="Relay timeline: Unichain freeze block 68,837,823, Lasna reaction block 9,291,302, Unichain FreezeRelayed block 68,837,825: 2 blocks, about 2 seconds.">
-  <div class="foot"><span>Tenure · UHI11</span><span>6</span></div>
+  <div class="foot"><span>Tenure · UHI11</span><span>7</span></div>
   <aside class="notes"><ul>
     <li>Markouts come due 50 blocks later. Settling one inside a swap costs that swapper about 146k gas.</li>
     <li>So SettlerRC on Lasna watches the hook and calls the permissionless settleMany. Honest status: it reacts live; the callback itself is proven in tests.</li>
@@ -303,8 +386,8 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
   </ul></aside>
 </section>
 
-<!-- 7 -->
-<section class="slide s7">
+<!-- 8 -->
+<section class="slide s8">
   <div class="kicker">Chainlink + Unichain</div>
   <h2>A fair price, and a cheap place to grade</h2>
   <div class="wrap">
@@ -332,7 +415,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     </div>
     <img class="arch" src="assets/A_architecture.png" alt="Architecture: curator agent, off-chain and untrusted, calls CuratedVault; PoolManager and TenureHook gate every liquidity move; TenureScorer library; Chainlink fair price into the hook; Reactive Lasna SettlerRC and FreezeRC; freeze relayed to vault B.">
   </div>
-  <div class="foot"><span>Tenure · UHI11</span><span>7</span></div>
+  <div class="foot"><span>Tenure · UHI11</span><span>8</span></div>
   <aside class="notes"><ul>
     <li>If grading used the pool's spot price, the attacker could push it for one block and fake a good grade.</li>
     <li>So every score uses ChainlinkReferencePrice. Stale or bad answers revert. Live on pool B with ETH/USD and USDC/USD.</li>
@@ -341,8 +424,8 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
   </ul></aside>
 </section>
 
-<!-- 8 -->
-<section class="slide s8">
+<!-- 9 -->
+<section class="slide s9">
   <div class="kicker">Live demo · Unichain Sepolia + Reactive Lasna</div>
   <h2>The attack, live on testnet</h2>
   <a class="url" href="https://tenure-hazel.vercel.app/">https://tenure-hazel.vercel.app/</a>
@@ -359,7 +442,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     <div class="shot"><img src="assets/H_lab_live_steps.png" width="852" alt="Tenure Lab live proof: the 8 proven steps on Unichain Sepolia and Reactive Lasna, including the relay to vault B 2 blocks later."></div>
     <img src="assets/D_live_budget.png" width="852" alt="Vault A risk budget per demo tick on Unichain Sepolia: 100% until tick 20, then 94.4, 94.9, 73.5, 47.3 (RESTRICTED, tick 23), 32.3, 15.1 (FROZEN, tick 25), 7.7.">
   </div>
-  <div class="foot"><span>Tenure · UHI11</span><span>8</span></div>
+  <div class="foot"><span>Tenure · UHI11</span><span>9</span></div>
   <aside class="notes"><ul>
     <li>This is where I switch to the screen recording of the Tenure Lab, live at https://tenure-hazel.vercel.app/.</li>
     <li>Poisoned at tick 20. RESTRICTED at 23, FROZEN at 25: three blocks after the first drop. Safe mode at 26.</li>
@@ -368,8 +451,8 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
   </ul></aside>
 </section>
 
-<!-- 9 -->
-<section class="slide s9">
+<!-- 10 -->
+<section class="slide s10">
   <div class="kicker">Results</div>
   <h2>Same attack, with and without Tenure</h2>
   <div class="bigs">
@@ -382,7 +465,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     <img src="assets/G_playground.png" width="840" alt="Losses let through over 52 decisions: no check 8,376 tokens; 0.2% static cap 8,376 (blocks 0 of 52); Tenure 2,471 (FROZEN after 9 of 52).">
   </div>
   <div class="rigor"><b>258</b> Foundry + <b>53</b> Python + <b>48</b> frontend tests &middot; Python and Solidity agree to the wei on <b>1,992</b> vectors &middot; <b>7</b> invariants, <b>128,000</b> random calls</div>
-  <div class="foot"><span>Tenure · UHI11</span><span>9</span></div>
+  <div class="foot"><span>Tenure · UHI11</span><span>10</span></div>
   <aside class="notes"><ul>
     <li>20 seeded runs of the same attack: Tenure froze the poisoned curator in all 20, 60 to 76 blocks after poisoning.</li>
     <li>The honest curator was never restricted: FULL in every block of every seed.</li>
@@ -392,8 +475,8 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
   </ul></aside>
 </section>
 
-<!-- 10 -->
-<section class="slide s10">
+<!-- 11 -->
+<section class="slide s11">
   <div class="kicker">Tenure</div>
   <h2>Autonomy that has to be earned</h2>
   <div class="cols">
@@ -406,7 +489,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     <div><span>Tenure Lab</span><span style="display:inline;letter-spacing:0;text-transform:none;font-size:36px;font-weight:700;color:var(--accent)"><a href="https://tenure-hazel.vercel.app/">https://tenure-hazel.vercel.app/</a></span></div>
   </div>
   <div class="thanks">Thank you.</div>
-  <div class="foot"><span>Tenure · UHI11</span><span>10</span></div>
+  <div class="foot"><span>Tenure · UHI11</span><span>11</span></div>
   <aside class="notes"><ul>
     <li>Scorecards tell you after the damage. Guardians need someone awake.</li>
     <li>Tenure acts automatically, at the moment of every decision.</li>

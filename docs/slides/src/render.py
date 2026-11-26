@@ -24,7 +24,7 @@ import websockets
 
 SLIDES = Path(__file__).resolve().parent.parent
 DECK = SLIDES / "deck.html"
-N_SLIDES = 10
+N_SLIDES = 11
 PORT = 9341
 
 CANDIDATES = [

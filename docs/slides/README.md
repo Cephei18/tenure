@@ -1,6 +1,6 @@
 # Tenure UHI11 demo-video deck
 
-Ten slides, 16:9 (1920x1080), in the red/pink theme of the Tenure Lab.
+Eleven slides, 16:9 (1920x1080), in the red/pink theme of the Tenure Lab.
 
 | File | What it is |
 |---|---|
@@ -26,7 +26,7 @@ Open `deck.html` in Chrome or Edge (double-click works; no server needed).
 | F | fullscreen |
 
 `deck.html#5` opens slide 5. The deck scales to any window and keeps 16:9. For the video, record it fullscreen
-at 1920x1080, or use the PDF. Slide 8 is where you switch to the Lab screen recording.
+at 1920x1080, or use the PDF. Slide 9 is where you switch to the Lab screen recording.
 
 ## Edit
 
@@ -35,7 +35,8 @@ at 1920x1080, or use the PDF. Slide 8 is where you switch to the Lab screen reco
   Without Inter, PowerPoint substitutes a system sans (checked on this machine: nothing overflows).
 - **HTML deck:** edit `deck.html` directly. Colours are CSS variables at the top (copied from
   `docs/design-tokens.json`). Speaker notes are the `<aside class="notes">` blocks. The Lab URL appears on
-  slides 8 and 10 and in their notes.
+  slides 9 and 11 and in their notes. Slide 6's code excerpts are the `.code` blocks (the PPTX builder parses them
+  from `deck.html` too, so edit them there and rebuild both).
 - **Charts:** edit `src/make_assets.py` (one function per chart). Charts read colours from
   `docs/design-tokens.json` when it exists, so they follow the Lab's theme.
 
@@ -51,21 +52,21 @@ python docs/slides/src/build_pptx.py                      # Tenure_UHI11.pptx (n
 Lab screenshots (asset H) come from the live site, not a local build:
 `python docs/slides/src/lab_screenshots.py` (default URL https://tenure-hazel.vercel.app/). It writes the four
 `assets/H_lab_*.png` directly: 1024 px viewport at 2x, sticky nav and toasts hidden, background padding trimmed.
-Slide 8 crops two of them in place (Overview: from the buttons down; Simulator: down to the budget rings); the
+Slide 9 crops two of them in place (Overview: from the buttons down; Simulator: down to the budget rings); the
 full captures stay in `assets/` for reuse.
 
 ## Assets
 
 | | File | Used on |
 |---|---|---|
-| A | `A_architecture.png`: curator -> vault -> PoolManager <-> TenureHook (+ TenureScorer), Chainlink, Lasna RCs, freeze to vault B | slide 7 |
+| A | `A_architecture.png`: curator -> vault -> PoolManager <-> TenureHook (+ TenureScorer), Chainlink, Lasna RCs, freeze to vault B | slide 8 |
 | B | `B_lifecycle.png`: beginRebalance -> unlock -> endRebalance -> markout 50 blocks later -> budget | slide 5 |
 | C | `C_tiers.png`: FROZEN < 20% / RESTRICTED 20-50% / FULL >= 50%, drain/refill, sticky, restore -> 35% | slide 4 |
-| D | `D_live_budget.png`: vault A budget per demo tick (1-90) on Unichain Sepolia, tier bands | slide 8 |
-| E | `E_relay_timeline.png`: freeze 68,837,823 -> Lasna 9,291,302 -> relay 68,837,825 | slide 6 |
-| F | `F_results.png`: slow bleed 9.52% vs 1.74%; median attacker profit 1,587 vs 650 | slide 9 |
-| G | `G_playground.png`: losses let through 8,376 / 8,376 (0.2% cap, blocks 0 of 52) / 2,471 (FROZEN after 9 of 52) | slide 9 |
-| H | `H_lab_overview.png` (hero + three live tiles), `H_lab_simulator.png` (Compare B vs C at block 172, just after C's FROZEN marker, budget rings), `H_lab_live.png` (Live proof section), `H_lab_live_steps.png` (the 8-step grid, "2 blocks later" on the relay card): captured from the live site https://tenure-hazel.vercel.app/ | slide 8 |
+| D | `D_live_budget.png`: vault A budget per demo tick (1-90) on Unichain Sepolia, tier bands | slide 9 |
+| E | `E_relay_timeline.png`: freeze 68,837,823 -> Lasna 9,291,302 -> relay 68,837,825 | slide 7 |
+| F | `F_results.png`: slow bleed 9.52% vs 1.74%; median attacker profit 1,587 vs 650 | slide 10 |
+| G | `G_playground.png`: losses let through 8,376 / 8,376 (0.2% cap, blocks 0 of 52) / 2,471 (FROZEN after 9 of 52) | slide 10 |
+| H | `H_lab_overview.png` (hero + three live tiles), `H_lab_simulator.png` (Compare B vs C at block 172, just after C's FROZEN marker, budget rings), `H_lab_live.png` (Live proof section), `H_lab_live_steps.png` (the 8-step grid, "2 blocks later" on the relay card): captured from the live site https://tenure-hazel.vercel.app/ | slide 9 |
 
 Tier colours are the Lab's exactly: FULL `#4ade80`, RESTRICTED `#fbbf24`, FROZEN `#e11d48`
 (`docs/design-tokens.json`, generated from `frontend/src/theme/tokens.ts`). Static caps vs Tenure use the Lab's
@@ -87,6 +88,8 @@ run colours (amber `#fbbf24` vs pink `#f472b6`).
 | 258 Foundry, 53 Python, 48 frontend tests | fresh runs on 2026-11-26: `forge test` (35 suites, 258 passed), `python -m pytest sim -q` (53 passed), `npx vitest run` in frontend/ at 7949bc2 (8 files, 48 passed) |
 | 1,992 vectors, to the wei | vitest output (`total=1992`); the Solidity differential tests (`test/diff/`) use exact `assertEq` |
 | 7 invariants over 128,000 random calls | README.md threat model summary |
+| TenureHook 22,528 B runtime (limit 24,576 B, 91.7%) | fresh `FOUNDRY_PROFILE=deploy forge build --sizes` on 2026-11-26 (margin 2,048 B; TenureScorer 6,302 B) |
+| Slide 6 permission bits 0x800 / 0x200 / 0x40 | `lib/uniswap-hooks/lib/v4-core/src/libraries/Hooks.sol`: BEFORE_ADD_LIQUIDITY_FLAG = 1 << 11, BEFORE_REMOVE_LIQUIDITY_FLAG = 1 << 9, AFTER_SWAP_FLAG = 1 << 6; hook `0xBe78...8A40` (deployments/1301.json), low 14 bits 0x0A40 |
 
 ## Visual check (done for every slide)
 
@@ -107,14 +110,22 @@ crop cut through the subtitle (now starts at the buttons); hyphens rendered spac
 Lab link in the theme's dark-blue hyperlink colour (theme hyperlink set to the deck pink). All 10 HTML previews,
 the PDF and a PowerPoint export were re-checked at 1920x1080.
 
+Slide 6 "Inside the hook" added (slides 6-10 renumbered to 7-11). Its code is verbatim from `src/TenureHook.sol`
+(4-space contract indent stripped; source line numbers in the gutter; `// ...` marks trims; endRebalance 366 and
+_afterSwap 549 are wrapped onto a second line to fit). Checked in the HTML preview, the PDF and a PowerPoint export:
+no overflow (widest code line ends 42 px inside its panel), code 22 px Consolas. Code colours on `#1f0a12`: keywords
+pink, text `#fbcfe8`, comments muted, `true` FULL green, all above 4.5:1.
+
 ## Known limits
 
-- In the slide 8 step-grid screenshot, the card body text is about 10-11 px at 1080p: crisp, but small. The grid
-  is there to show the 8-step shape and the "2 blocks later" badge. The screen recording that follows slide 8
+- In the slide 9 step-grid screenshot, the card body text is about 10-11 px at 1080p: crisp, but small. The grid
+  is there to show the 8-step shape and the "2 blocks later" badge. The screen recording that follows slide 9
   shows it full size.
 - The Lab screenshots show live chain state as of 2026-11-26 (read at block ~68.86M). Re-run
   `lab_screenshots.py` before recording if the live values change.
-- Slide 6: the Reactive settlement callback has not landed live yet (README.md), so the slide says it is proven
+- Slide 7: the Reactive settlement callback has not landed live yet (README.md), so the slide says it is proven
   in tests. The freeze relay is live.
+- Slide 6 code uses Consolas (Windows / Office). On a machine without it the HTML falls back to the system
+  monospace, which is wider and could clip the longest line; present from Windows or use the PDF.
 - In the PPTX, the theme's hyperlink colour is set to the deck pink, so the Lab link stays readable on the dark
   background. PowerPoint underlines hyperlinks.
