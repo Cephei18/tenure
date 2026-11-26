@@ -108,6 +108,14 @@ Relay tx:
 (block 68,837,825). The full restore, re-freeze and relay sequence, with every tx, is in
 [`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#live-verification-2026-11-26).
 
+**Depositors can always exit, even while FROZEN.** The demo then ran to tick 210 with vault A FROZEN the whole
+time. The attack stayed at 3 rounds, the attacker's profit stayed at +739 tokens, and NAV vs start recovered from
+-788 to -423. Then the depositor redeemed all 79,999,999,999,999,999,000,000 shares of the FROZEN vault in one tx:
+[`0xfd84e1bc...78ce7`](https://sepolia.uniscan.xyz/tx/0xfd84e1bc71bf633e8bd0453d1057ecc343301d21a04171a6e332188a2ae78ce7)
+(block 68,844,903, 249,186 gas). The vault's only remaining shares are its 1,000,000 base-unit dead shares
+(`DEAD_SHARES = 1e6`, 1e-12 of a share), which were burned to `0xdEaD` at the first deposit to block share-inflation
+attacks. They stay by design. The largest tx of that run used 328,027 gas.
+
 | Contract | Chain | Address | Status |
 |---|---|---|---|
 | `TenureHook` | Unichain Sepolia (1301) | `0xBe78c4327a48414e0C9701a3B5840da39D828A40` | live |

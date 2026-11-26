@@ -5,7 +5,9 @@
 #   bash script/demo_testnet.sh
 #
 # Env: RPC (default https://sepolia.unichain.org, the only keyless Sepolia RPC in the official Unichain docs),
-#      ACCOUNT (Foundry keystore name, default tenure-burner), TICKS (default 110),
+#      ACCOUNT (Foundry keystore name, default tenure-burner),
+#      TICKS (TARGET total of director ticks, default 110; a re-run resumes and sends only TICKS - ticks()
+#      already run, so an interrupted run can simply be restarted with the same TICKS),
 #      EVERY (status line every N ticks, default 10),
 #      SENDER (address of that keystore, default the deployer from deployments/1301.json; used for nonce checks),
 #      PASSWORD_FILE (optional: a file holding the keystore password, created by YOU; see docs/DEPLOY.md),
@@ -154,7 +156,7 @@ send() {
 
 TICK_BEFORE=0
 tick_landed() { local t; t=$(num "$DIRECTOR" "ticks()(uint256)") && [ "$t" -gt "$TICK_BEFORE" ]; }
-withdraw_landed() { local s; s=$(num "$VAULT" "balanceOf(address)(uint256)" "$ME") && [ "$s" = 0 ]; }
+withdraw_landed() { local s; s=$(num "$VAULT" "balanceOf(address)(uint256)" "$FROM") && [ "$s" = 0 ]; }
 
 done_ticks=$(num "$DIRECTOR" "ticks()(uint256)") || die "cannot read the director"
 echo "director $DIRECTOR | vault $VAULT | ticks already run: $done_ticks | RPC $RPC"
@@ -163,13 +165,16 @@ if upd=$(ro call "$ORACLE" "getSqrtPriceX96(bytes32)(uint160,uint256)" "$POOL" |
   echo "demo fair price last published $((now - upd)) s ago (pool A max age 3600 s); every tick() republishes it first"
 fi
 echo "gas limit per tx: $GAS_LIMIT (cap $TX_GAS_CAP)"
-echo "about to send $TICKS tick() transactions from $FROM (keystore '$ACCOUNT') on Unichain Sepolia."
+[[ "$TICKS" =~ ^[0-9]+$ ]] || die "TICKS must be a number, got '$TICKS'"
+# TICKS is the target total: resume from ticks() instead of sending TICKS more (a re-run once went 100 -> 210).
+REMAINING=$((TICKS > done_ticks ? TICKS - done_ticks : 0))
+echo "target $TICKS ticks, $done_ticks already run: about to send $REMAINING tick() transactions from $FROM (keystore '$ACCOUNT') on Unichain Sepolia."
 [ -n "${PASSWORD_FILE:-}" ] && echo "signing with the password file (no prompts)" || echo "cast will ask for the keystore password on every transaction"
 read -r -p "continue? [y/N] " ok
 [ "$ok" = "y" ] || exit 0
 
 echo "   $(status)"
-for ((i = 1; i <= TICKS; i++)); do
+for ((i = 1; i <= REMAINING; i++)); do
   TICK_BEFORE=$(num "$DIRECTOR" "ticks()(uint256)") || die "cannot read ticks()"
   send tick_landed "$DIRECTOR" "tick()"
   note=$(ro call "$DIRECTOR" "note()(string)" | sed 's/^"//; s/"$//') || note=""
@@ -183,9 +188,14 @@ done
 
 echo
 echo "withdrawals are never blocked, even when FROZEN:"
-shares=$(num "$VAULT" "balanceOf(address)(uint256)" "$ME") || die "cannot read shares"
-send withdraw_landed "$VAULT" "withdraw(uint256,uint256,uint256,address)" "$shares" 0 0 "$ME"
-echo "   redeemed all $shares shares (see the Withdraw event on the explorer)"
+# The signer ($FROM) redeems its own shares; withdraw(0) would revert, so skip it when there is nothing left.
+shares=$(num "$VAULT" "balanceOf(address)(uint256)" "$FROM") || die "cannot read shares"
+if [ "$shares" = 0 ]; then
+  echo "   $FROM holds no shares of vault A (already redeemed): nothing to withdraw"
+else
+  send withdraw_landed "$VAULT" "withdraw(uint256,uint256,uint256,address)" "$shares" 0 0 "$FROM"
+  echo "   redeemed all $shares shares (see the Withdraw event on the explorer)"
+fi
 echo
 echo "summary: poisoned at tick $(num "$DIRECTOR" "poisonAt()(uint256)") | FROZEN at tick $(num "$DIRECTOR" "frozenAt()(uint256)") | attack rounds: $(num "$DIRECTOR" "rounds()(uint256)")"
 echo "max gas used by any confirmed tx this run: $MAX_USED (limit $GAS_LIMIT)"

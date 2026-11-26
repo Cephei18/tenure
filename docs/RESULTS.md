@@ -76,3 +76,17 @@ A: FULL in all 600 blocks. B: 25 rounds, -4,197 vs A, attacker +1,563. C: RESTRI
 per-action cap: the static cap allows all of them; Tenure's budget restricts at action 22 and freezes at 57.
 
 ![Slow bleed: static cap vs Tenure budget](results/slow_bleed.png)
+
+## Live testnet run: withdrawal while FROZEN (Unichain Sepolia, 2026-11-26)
+
+`script/demo_testnet.sh` against the deployed demo pool A (vault `0xA1478638E58333e3910aEfCA9616468503FC744B`):
+
+- Ticks 100-210 ran with vault A FROZEN throughout. Attack rounds stayed at 3, the attacker's profit stayed at
+  +739 tokens, and NAV vs start recovered from -788 to -423 (an idle vault still moves with the market).
+- Then the depositor redeemed all 79,999,999,999,999,999,000,000 shares of the FROZEN vault: tx
+  [`0xfd84e1bc71bf633e8bd0453d1057ecc343301d21a04171a6e332188a2ae78ce7`](https://sepolia.uniscan.xyz/tx/0xfd84e1bc71bf633e8bd0453d1057ecc343301d21a04171a6e332188a2ae78ce7)
+  (block 68,844,903, 249,186 gas). Withdrawals have no tier check, no oracle and no price dependency.
+- Afterwards `totalSupply() == balanceOf(0xdEaD) == 1,000,000`. These are the dead shares
+  (`CuratedVault.DEAD_SHARES = 1e6` base units, 1e-12 of a share) burned at the first deposit against
+  share-inflation attacks. They can never be redeemed, by design.
+- Max gas of any tx in the run: 328,027 (the per-tx limit was 3,000,000).
