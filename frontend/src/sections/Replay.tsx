@@ -3,6 +3,7 @@ import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { POISON_AT, attackRounds, headline, sweep } from "../lib/data";
+import { sweepStats } from "../lib/stats";
 import { Card, RUN_COLORS, RUN_LABELS, Section, Source, Stat, TierBadge, fmtPct, fmtTok } from "../components/ui";
 import { FROZEN, RESTRICTED } from "../math/budget";
 
@@ -15,11 +16,6 @@ const ROUNDS = { B: attackRounds("B"), C: attackRounds("C") };
 const AXIS = { stroke: "#8a94ad", fontSize: 11 };
 const TIP = { contentStyle: { background: "#121826", border: "1px solid #263049", fontSize: 12 }, labelStyle: { color: "#e6eaf2" } };
 
-function median(xs: number[]) {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-}
 
 export default function Replay() {
   const [frame, setFrame] = useState(LAST);
@@ -65,15 +61,14 @@ export default function Replay() {
   const sw = useMemo(() => {
     const frozen = sweep.filter((r) => r.cBlocksToFrozen > 0).length;
     const honestNeverRestricted = sweep.every((r) => r.aMinRatio >= 0.5);
-    const mB = median(sweep.map((r) => r.profitB));
-    const mC = median(sweep.map((r) => r.profitC));
+    const exact = sweepStats(); // exact BigInt medians, rounded half up (the rule in docs/RESULTS.md)
     const freezeMin = Math.min(...sweep.map((r) => r.cBlocksToFrozen));
     const freezeMax = Math.max(...sweep.map((r) => r.cBlocksToFrozen));
     const minA = Math.min(...sweep.map((r) => r.aMinRatio));
     const bars = [...sweep].sort((a, b) => a.lossB - b.lossB).map((r) => ({
       seed: `#${r.seed}`, B: Math.round(r.lossB), C: Math.round(r.lossC), freeze: r.cBlocksToFrozen,
     }));
-    return { frozen, honestNeverRestricted, mB, mC, cut: 1 - mC / mB, freezeMin, freezeMax, minA, bars, n: sweep.length };
+    return { frozen, honestNeverRestricted, exact, freezeMin, freezeMax, minA, bars, n: sweep.length };
   }, []);
   const honestHeadline = headline.every((r) => r.tier[0] === 0);
 
@@ -97,7 +92,7 @@ export default function Replay() {
           value={sw.honestNeverRestricted && honestHeadline ? "never" : "yes"}
           sub={`lowest budget seen: ${fmtPct(sw.minA)} (FULL needs 50%)`} color="var(--color-full)"
         />
-        <Stat label="Attacker profit (median)" value={`−${(sw.cut * 100).toFixed(0)}%`} sub={`${fmtTok(sw.mB)} → ${fmtTok(sw.mC)} tokens`} color="var(--color-runC)" />
+        <Stat label="Attacker profit (median)" value={`−${sw.exact.profitCutPct}%`} sub={`${sw.exact.medianProfitB.toLocaleString("en-US")} → ${sw.exact.medianProfitC.toLocaleString("en-US")} tokens`} color="var(--color-runC)" />
         <Stat label="Attack rounds (headline seed)" value={`${ROUNDS.B.length} → ${ROUNDS.C.length}`} sub="static caps vs Tenure" />
       </div>
 

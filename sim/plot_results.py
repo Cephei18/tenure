@@ -13,6 +13,7 @@ Floats are fine here: this is plotting only, never model math.
 from __future__ import annotations
 
 import csv
+import math
 import os
 import sys
 
@@ -44,6 +45,11 @@ SURFACE = "#fcfcfb"
 TIER_NAMES = {0: "FULL", 1: "RESTRICTED", 2: "FROZEN"}
 POISON_BLOCK = 100  # Headline.t.sol: the curator is poisoned at block 100
 
+
+
+def _half_up(x: float) -> int:
+    """Round half up to a whole token: the one rounding rule of docs/RESULTS.md."""
+    return math.floor(x + 0.5)
 
 def _style() -> None:
     plt.rcParams.update(
@@ -192,10 +198,10 @@ def plot_sweep(out: str) -> None:
     medB = sb[n // 2] if n % 2 else (sb[n // 2 - 1] + sb[n // 2]) / 2
     worstC = max(d[2] for d in data)
     ax.axvline(medB, color=COLOR_B, linewidth=1, linestyle=(0, (4, 3)))
-    ax.annotate(f"B median {int(medB):,}", xy=(medB, 1.0), xycoords=("data", "axes fraction"), xytext=(4, -2),
+    ax.annotate(f"B median {_half_up(medB):,}", xy=(medB, 1.0), xycoords=("data", "axes fraction"), xytext=(4, -2),
                 textcoords="offset points", va="top", fontsize=9, color=INK_2)
     ax.axvline(worstC, color=COLOR_C, linewidth=1, linestyle=(0, (4, 3)))
-    ax.annotate(f"C worst {int(worstC):,}", xy=(worstC, 1.0), xycoords=("data", "axes fraction"), xytext=(-4, -2),
+    ax.annotate(f"C worst {_half_up(worstC):,}", xy=(worstC, 1.0), xycoords=("data", "axes fraction"), xytext=(-4, -2),
                 textcoords="offset points", ha="right", va="top", fontsize=9, color=INK_2)
     ax.set_xlim(0, max(d[1] for d in data) * 1.08)
     ax.xaxis.set_major_formatter(COMMA)

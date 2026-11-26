@@ -4,6 +4,10 @@ All numbers come from Foundry tests against a real v4 PoolManager, the real `Ten
 `CuratedVault`. Tokens are whole token units (18 decimals) valued at the fair price. Raw data lives in
 `docs/results/`. Charts are regenerated from the CSVs by `python sim/plot_results.py`.
 
+**Rounding (one rule for every figure computed from the CSVs here, in the README and in the frontend):** token
+amounts are rounded half up to whole tokens, percentages half up to the shown digit. A median of the 20 seeds is the
+mean of the two middle seeds, computed exactly before rounding.
+
 ![Headline: B vs C value lost, tier changes, budget](results/headline.png)
 
 ## Setup (shared by every run)
@@ -30,9 +34,9 @@ All numbers come from Foundry tests against a real v4 PoolManager, the real `Ten
 
 | Metric (20 seeds) | Median | Worst / best |
 |---|---:|---:|
-| B: vault loss vs A (tokens) | 6,450 | worst 7,435 |
+| B: vault loss vs A (tokens) | 6,451 | worst 7,435 |
 | C: vault loss vs A (tokens) | 3,729 | worst 4,520 |
-| B: attacker profit (tokens) | 1,586 | best 1,697 |
+| B: attacker profit (tokens) | 1,587 | best 1,697 |
 | C: attacker profit (tokens) | 650 | best 748 |
 | B: attack rounds completed | 25 | 25 |
 | C: attack rounds before FROZEN | 3 | max 3 |
@@ -41,21 +45,21 @@ All numbers come from Foundry tests against a real v4 PoolManager, the real `Ten
 | A: minimum budget ratio | 95.4% | worst 83.1% (FULL in every block of every seed) |
 
 **Acceptance:** A stays FULL on every seed (asserted every block). C's worst-case loss (4,520) is below B's
-median loss (6,450).
+median loss (6,451).
 
 ### How to read "loss vs A" (important)
 
 "Loss vs A" is NAV(A) - NAV(run) at block 600. It mixes two things:
-1. **Attack damage.** The attacker's profit is the cleanest measure of it: 650 under Tenure vs 1,586 with static
+1. **Attack damage.** The attacker's profit is the cleanest measure of it: 650 under Tenure vs 1,587 with static
    caps (median). Tenure stops the attack after about 3 rounds instead of letting it run for 25.
 2. **Market divergence.** After the attack starts, B and C hold different positions from A (parked ranges,
    inventory swaps, and for C an idle vault after safe mode). On a random walk their NAVs drift away from A's in
    both directions. This part is large: on every seed B and C share most of it, and the gap B - C is very stable
-   (2,571 to 2,938 tokens, median about 2,770). That gap is the value Tenure kept for depositors in this
+   (2,571 to 2,938 tokens, median 2,771). That gap is the value Tenure kept for depositors in this
    scenario, while the common part is mainly how this particular poisoned policy and the market path interact.
 
 So the honest headline is: **Tenure froze the poisoned curator on 20 / 20 seeds within 60-76 blocks of the
-attack starting, cut attacker profit by about 60%, and saved about 2,770 tokens (3.5% of NAV) per run vs static
+attack starting, cut attacker profit by 59% (median), and saved a median 2,771 tokens (3.5% of NAV) per run vs static
 caps, while never restricting the honest curator.** Loss vs A should not be read as pure attack damage.
 
 ### Caveats

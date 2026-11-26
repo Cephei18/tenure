@@ -9,10 +9,17 @@ import {VectorReader} from "./VectorReader.sol";
 contract RiskBudgetDiffTest is VectorReader {
     function test_diff_budgetSequences() public view {
         string memory j = _load("budget");
-        BudgetParams memory p = TenureDefaults.budgetParams();
         uint256 n = _count(j);
         uint256 checked;
+        uint256 customParams;
         for (uint256 i; i < n; ++i) {
+            // Optional per-case params (tier-boundary cases with non-round thresholds); default params otherwise.
+            BudgetParams memory p = TenureDefaults.budgetParams();
+            if (vm.keyExistsJson(j, _key(i, "params"))) {
+                p = _params(j, i);
+                RiskBudget.validate(p);
+                customParams++;
+            }
             BudgetState memory s = RiskBudget.init(p, _u(j, i, "startBlock"));
             for (uint256 o;; ++o) {
                 string memory base = string.concat("ops[", vm.toString(o), "].");
@@ -23,6 +30,22 @@ contract RiskBudgetDiffTest is VectorReader {
             }
         }
         assertGe(checked, 200, "at least 200 budget states checked");
+        assertGe(customParams, 2, "tier-boundary cases with non-round thresholds are present");
+    }
+
+    function _params(string memory j, uint256 i) internal pure returns (BudgetParams memory) {
+        return BudgetParams({
+            bMax0: _u(j, i, "params.bMax0"),
+            bMaxCap: _u(j, i, "params.bMaxCap"),
+            refillRate: _u(j, i, "params.refillRate"),
+            fullThreshold: _u(j, i, "params.fullThreshold"),
+            restrictedThreshold: _u(j, i, "params.restrictedThreshold"),
+            restoreWad: _u(j, i, "params.restoreWad"),
+            k: _u(j, i, "params.k"),
+            cap0: _u(j, i, "params.cap0"),
+            capMax: _u(j, i, "params.capMax"),
+            m: _u(j, i, "params.m")
+        });
     }
 
     function _apply(string memory j, uint256 i, string memory base, BudgetState memory s, BudgetParams memory p)

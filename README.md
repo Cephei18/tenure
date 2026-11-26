@@ -12,8 +12,8 @@ empties, and it can only earn more room (budget and deposit cap) with proven pos
 | | Static caps only | With Tenure |
 |---|---:|---:|
 | Poisoned curator stopped | never (25 attack rounds) | **FROZEN on 20 / 20 seeds, 60-76 blocks after poisoning** |
-| Attacker profit (median of 20 seeds) | 1,586 tokens | **650 tokens (-59%)** |
-| Value kept for depositors vs static caps | - | **~2,770 tokens (3.5% of NAV) per run** |
+| Attacker profit (median of 20 seeds) | 1,587 tokens | **650 tokens (-59%)** |
+| Value kept for depositors vs static caps (median) | - | **2,771 tokens (3.5% of NAV) per run** |
 
 The honest curator was never restricted (FULL in every block of every seed). Source: [`docs/RESULTS.md`](docs/RESULTS.md).
 

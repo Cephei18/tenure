@@ -220,6 +220,52 @@ def gen_budget(rng):
                        "cumAlphaValue": s(st.cum_alpha_value), "depositCap": s(deposit_cap(st, p))})
             ops.append(op)
         seqs.append({"startBlock": "1000", "ops": ops})
+    return seqs + boundary_budget_seqs()
+
+
+def _params_json(p: BudgetParams) -> dict:
+    return {"bMax0": s(p.b_max0), "bMaxCap": s(p.b_max_cap), "refillRate": s(p.refill_rate),
+            "fullThreshold": s(p.full_threshold), "restrictedThreshold": s(p.restricted_threshold),
+            "restoreWad": s(p.restore_wad), "k": s(p.k), "cap0": s(p.cap0), "capMax": s(p.cap_max), "m": s(p.m)}
+
+
+def boundary_budget_seqs() -> list:
+    """Tier boundaries, built WITHOUT the rng (so every later generator's output is unchanged).
+
+    Each sequence charges in the same block (refill is a no-op) to walk the budget across a threshold one wei at
+    a time: threshold + 1 wei, exactly at it (when reachable), threshold - 1 wei.
+
+    * Default params (50% / 20%, bMax 2e16): budget exactly at 50% (1e16) and 20% (4e15) and +/-1 wei.
+    * Non-round params (bMax0 3e16, thresholds 50% + 34 wei and 20% + 34 wei): the only kind of state where
+      floor(budget*WAD/bMax) and a ceiling differ in tier. With the defaults they cannot differ (T*bMax mod WAD is a
+      multiple of 1e17 >= bMax), so these cases are what pins tierFor's floor. E.g. budget 1.5e16 + 1 gives ratio
+      5e17 + 33.33: floor -> RESTRICTED, ceil -> FULL.
+    """
+    from model import validate
+
+    odd = BudgetParams(b_max0=3 * 10**16, full_threshold=5 * 10**17 + 34, restricted_threshold=2 * 10**17 + 34)
+    plans = [  # (params, budgets to walk through, in order)
+        (BudgetParams(), [10**16 + 1, 10**16, 10**16 - 1]),
+        (BudgetParams(), [4 * 10**15 + 1, 4 * 10**15, 4 * 10**15 - 1]),
+        (odd, [15 * 10**15 + 2, 15 * 10**15 + 1, 15 * 10**15]),
+        (odd, [6 * 10**15 + 2, 6 * 10**15 + 1, 6 * 10**15]),
+    ]
+    seqs = []
+    for p, budgets in plans:
+        validate(p)
+        st = init_state(p, 1000)
+        ops = []
+        for target in budgets:
+            lw = st.budget - target
+            st = charge(refill(st, p, 1000), p, lw, 0)
+            assert st.budget == target
+            ops.append({"kind": "1", "a": s(lw), "b": "0", "block": "1000", "budget": s(st.budget), "bMax": s(st.b_max),
+                        "lastBlock": s(st.last_block), "tier": s(st.tier), "cumAlphaWad": s(st.cum_alpha_wad),
+                        "cumAlphaValue": s(st.cum_alpha_value), "depositCap": s(deposit_cap(st, p))})
+        seq = {"startBlock": "1000", "ops": ops}
+        if p != BudgetParams():
+            seq["params"] = _params_json(p)
+        seqs.append(seq)
     return seqs
 
 

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, afterAll } from "vitest";
 import { holdings, nav, scoreLeakage, markoutAlpha, lossWad, gainWad, type Position } from "./position";
 import {
-  DEFAULT_PARAMS, charge, credit, depositCap, initState, refill, restore, type BudgetState,
+  DEFAULT_PARAMS, charge, credit, depositCap, initState, refill, restore, type BudgetParams, type BudgetState,
 } from "./budget";
 import { chainlinkSqrtPriceX96, estimateFees, feeGrowthDelta, markoutAlphaFees } from "./extras";
 
@@ -16,6 +16,7 @@ const B = (s: string) => BigInt(s);
 const pos = (p: Any): Position => ({ tickLower: Number(p.tickLower), tickUpper: Number(p.tickUpper), liquidity: B(p.liquidity) });
 
 const checked: Record<string, number> = {};
+let customSeqs = 0; // budget sequences with their own params (not a vector count)
 const count = (k: string) => (checked[k] = (checked[k] ?? 0) + 1);
 afterAll(() => {
   const total = Object.values(checked).reduce((a, b) => a + b, 0);
@@ -76,8 +77,12 @@ describe("test/vectors (exact match with Solidity / sim/model.py)", () => {
 
   it("budget.json (every op of every sequence: full state + deposit cap)", () => {
     const v = load("budget");
-    const p = DEFAULT_PARAMS;
     for (const seq of v.cases) {
+      // optional per-case params (tier-boundary cases with non-round thresholds); defaults otherwise
+      const p: BudgetParams = seq.params
+        ? (Object.fromEntries(Object.entries(seq.params).map(([k, x]) => [k, B(x as string)])) as unknown as BudgetParams)
+        : DEFAULT_PARAMS;
+      if (seq.params) customSeqs++;
       let st: BudgetState = initState(p, B(seq.startBlock));
       for (const op of seq.ops) {
         const blk = B(op.block);
@@ -97,6 +102,7 @@ describe("test/vectors (exact match with Solidity / sim/model.py)", () => {
       }
     }
     expect(checked["budget-ops"]).toBe(v.cases.reduce((n: number, s: Any) => n + s.ops.length, 0));
+    expect(customSeqs).toBeGreaterThanOrEqual(2); // the non-round-threshold boundary sequences are present
   });
 
   it("fees.json (fee estimates and fee-aware alpha)", () => {
