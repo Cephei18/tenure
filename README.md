@@ -53,7 +53,7 @@ Withdrawals are always open: no tier check, no oracle, no price.
 | Bounded-leakage managers (Arrakis: an off-chain, trusted manager limited by static per-action / per-block limits) | The size of any single bad action | A slow bleed of many small, individually valid actions; the limits never tighten after losses | Scores every action at the fair price and accumulates the damage, so a 3-round bleed ends in FROZEN |
 | Guardians and timelocks (Morpho and Yearn vault curators) | Configuration changes: depositors get time to exit before new parameters apply | The outcome of decisions made inside an unchanged configuration | Keeps a timelocked mandate, and also grades every decision made inside it |
 | Curator scorecards and risk ratings | Nothing on-chain: they inform depositors after the fact | Enforcement; they rely on external, gameable data | Reputation is measured by the hook itself and enforced on-chain (budget, tier, deposit cap) |
-| Agent spending limits (e.g. Kusari-style per-agent limits) | How much value an agent may move | Whether the moves lose value: an LP rebalance at a bad price moves "allowed" amounts | Measures the value lost by each move at the fair price, and shrinks autonomy as losses add up |
+| Agent policy hooks (Kusari, ETHGlobal Mumbai 2026: a hook enforcing per-agent policies set in ENSv2 on the agent's own swaps: per-swap and daily caps, allowed pool, max price impact, signed minimum output and intent) | What an agent may do | It does not measure decision quality or adjust autonomy | Measures the value lost by each move at the fair price, and shrinks autonomy as losses add up |
 
 The difference in one line: other approaches limit what a curator may do. Tenure measures what its decisions
 actually cost depositors, and grants or withdraws autonomy based on that.
@@ -138,6 +138,12 @@ curator's other vault through `TenureFreezeReceiver`. The relay can only freeze,
   `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0` on Unichain Sepolia. Freeze relay verified live:
   [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696)
   ([`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#live-verification-2026-11-26)).
+- Settler status. Live: it reacted to pool A's events and queued, then dropped, records 6 and 7 (Lasna txs
+  `0x8e18e43b...`, `0x2212783e...`, `0x7a2498e3...`, `0x0c2caa5a...`). Both records were settled on Unichain by other
+  paths (`afterSwap`, then a manual `settleMany`) before they came due at a cron tick. So the settler has **not yet
+  delivered a settlement callback live**: there is no `ReactiveSettle` on the receiver so far. That callback path
+  is covered by tests only. Details:
+  [`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#settler-what-is-proven-live-and-what-only-by-tests-checked-2026-11-26-read-only).
 
 ### Unichain: the L2 home
 
@@ -167,6 +173,10 @@ Relay tx:
 [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696)
 (block 68,837,825). The full restore, re-freeze and relay sequence, with every tx, is in
 [`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#live-verification-2026-11-26).
+
+Keeper-free settlement through Reactive is deployed and its RC reacts live. However, no Reactive settlement
+callback has landed yet, because every record was settled by `afterSwap` or by hand first. That path is proven by
+tests only (see "Partner integrations" above).
 
 **Depositors can always exit, even while FROZEN.** The demo then ran to tick 210 with vault A FROZEN the whole
 time. The attack stayed at 3 rounds, the attacker's profit stayed at +739 tokens, and NAV vs start recovered from
@@ -227,6 +237,8 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
 
 - The fair price is a trust root. A wrong or compromised feed misprices every score; a feed far from the market
   stalls markouts rather than scoring them. There is no second-source deviation check yet.
+- No L2 sequencer uptime check. A production deployment on an L2 should add a Chainlink L2 sequencer uptime
+  check to `ChainlinkReferencePrice`. The testnet adapter does not have one.
 - One vault per pool, one range per vault (MVP).
 - The hook is 22,528 B with via-IR, only 48 B above its own 2,000 B headroom guard. New logic must move math into
   the linked `TenureScorer` library first.
@@ -281,6 +293,10 @@ Dependencies are git submodules under `lib/`, pinned in [`foundry.lock`](foundry
 | reactive-test-lib | `lib/reactive-test-lib` @ `2ff9b2a` | No longer imported (replaced by `ReactiveNetworkSim`); kept pinned for history |
 | forge-std | `lib/forge-std` @ `8bbcf6e` | Test and script framework |
 | Chainlink `AggregatorV3Interface` | smartcontractkit/chainlink (MIT), interface only | Vendored as [`src/interfaces/AggregatorV3Interface.sol`](src/interfaces/AggregatorV3Interface.sol) |
+
+`test/utils/BaseTest.sol`, `test/utils/Deployers.sol` (UNLICENSED) and `test/utils/libraries/EasyPosm.sol`
+(GPL-2.0-or-later) are template test helpers. Their content is unmodified (only the line endings were normalized
+to LF), they keep their original license headers, and they are not part of the deployed contracts.
 
 Original to Tenure: everything else in `src/` (`TenureHook`, `CuratedVault`, `ChainlinkReferencePrice`, the
 scoring, budget and position-value libraries, the Reactive contracts), the deploy, check and demo scripts

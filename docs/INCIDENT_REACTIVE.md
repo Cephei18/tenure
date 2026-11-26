@@ -47,6 +47,42 @@ Tick labels, verified by reading the director's `note()` right after each tick:
   `TenureReactiveReceiver` `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0`. The legacy RCs and receivers listed in
   this document are stranded and no longer used.
 
+### Settler: what is proven live, and what only by tests (checked 2026-11-26, read-only)
+
+The settler RC is live and reacting, but it has **not yet delivered a settlement callback** on testnet.
+
+- **Settler RC reacted to pool A's events on Lasna.** It reacted to `RebalanceScored` and `MarkoutSettled` (all
+  four txs succeeded, all from `0x038e06667e42782e571eab20432b9237f9bd6b82` to `0x8888`):
+
+  | Event | Lasna block | Tx |
+  |---|---:|---|
+  | `Queued(6, due 9,291,147)` | 9,291,087 | `0x8e18e43beddd3b7ae4166c4caefbc8d9c3b680bd6592f7c625ab0f790f2a571b` |
+  | `Dropped(6)` | 9,291,191 | `0x2212783ef81933cc8ed623d56612bb05e5e9a35176c2e4e203f4f962a4279144` |
+  | `Queued(7, due 9,291,251)` | 9,291,191 | `0x7a2498e39771f0a752b8dff5ad4bb877bfa8c278f440d5fa02b049f24e714afa` |
+  | `Dropped(7)` | 9,291,302 | `0x0c2caa5a5d379f561895bbeff11eeb9ea3d22f25363051e672fde38d0d946d65` |
+
+- **No settlement callback yet.** The RC emitted no `SettleRequested` between its deploy (Lasna 9,289,404) and
+  9,300,482. `TenureReactiveReceiver` `0xb326...c7f0` emitted no `ReactiveSettle`, or any other log, between its
+  deploy (Unichain 68,835,437) and 68,847,901. Both ranges were scanned in 1,000-block chunks.
+- **Why no callback.** Each record was settled on Unichain before the RC's next Cron1000 tick (Lasna 9,292,000):
+  - record 6 by `afterSwap` auto-settlement in the attack tick;
+  - record 7 by the manual `settleMany`.
+
+  So the RC dropped both records before either was sent. Ticks 100-210 ran with A FROZEN, which means no
+  rebalances and no new records.
+- **Cron reactions: indirect evidence only.** The RC's reserves at `0x8888` fell from the deposited 0.8 to
+  0.6094 lREACT, its debt is 0 and `subscribed()` is true. The 0.19 lREACT spent is consistent with about 11
+  Cron1000 ticks (one per 1,000 of the ~11,078 blocks) plus the 4 event reactions. A cron tick with nothing due
+  emits no log, so these reactions cannot be identified by log queries on the public RPC. Their txs may be
+  visible on the settler's reactscan page linked above.
+- **Covered only by tests: the callback path** (cron tick, then `SettleRequested`, then
+  `TenureReactiveReceiver.settleMany`, then `ReactiveSettle`). Tests:
+  - `test/reactive/ReactiveSettlement.t.sol`;
+  - `test/reactive/ReactiveConformance.t.sol`, on `ReactiveNetworkSim`, which bills and injects the RC like the
+    live network.
+- **To prove it live:** let a scored record sit for 60+ Lasna blocks with no swap and no manual settle, then watch
+  for `ReactiveSettle` on the receiver.
+
 ## Summary
 
 Both Lasna reactive contracts (RCs) were blacklisted the first time the network delivered an event to them:
