@@ -28,7 +28,7 @@ Tick labels, verified by reading the director's `note()` right after each tick:
 
 - The relay landed **2 Unichain blocks** after the freeze: Unichain freeze (68,837,823) -> Lasna reaction
   (9,291,302) -> Unichain relay (68,837,825).
-- I found the Lasna reaction tx by a read-only log query on Lasna. It is the only `FreezeRelayRequested` the RC
+- The Lasna reaction tx was identified with read-only log queries on Lasna. It is the only `FreezeRelayRequested` the RC
   emitted in Lasna blocks 9,291,250-9,291,450. Its payload matches the relay (vault B, chain 1301, the new
   receiver). Its sender was `0x038e06667e42782e571eab20432b9237f9bd6b82`, and the tx went to `0x8888`. Block
   timestamps: Unichain freeze 1795690251, Lasna reaction 1795690250, Unichain relay 1795690253. The 1 s gap
