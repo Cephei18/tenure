@@ -67,6 +67,15 @@ input[type="range"] {
   animation: pop 450ms var(--ease-out);
 }
 
+/* a step result flashes when its value changes (re-keyed span) */
+@keyframes flash {
+  from { background: color-mix(in srgb, var(--color-accent) 28%, transparent); }
+  to { background: transparent; }
+}
+.flash {
+  animation: flash 700ms var(--ease-out);
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {

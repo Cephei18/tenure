@@ -38,7 +38,7 @@ export const DEMO_STEPS: DemoStep[] = [
     run: () => emit("live:scrollTo", { index: 7 }),
   },
   { target: "grading", ms: 9000, caption: "Grading: value leaked at the trade, then a markout against doing nothing." },
-  { target: "overview", ms: 5000, caption: "Don't detect the compromise. Measure the damage." },
+  { target: "overview", ms: 5000, caption: "Don't just detect the compromise. Measure the damage." },
 ];
 
 export const DEMO_TOTAL_MS = DEMO_STEPS.reduce((s, x) => s + x.ms, 0);

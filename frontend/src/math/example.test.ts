@@ -35,3 +35,22 @@ describe("worked example", () => {
     expect(markoutAlpha(OLD, [0n, 0n], nw, idle, T, T)).toBeLessThan(0n);
   });
 });
+
+describe("worked solution identities (what the Grading steps display)", () => {
+  it("each substituted line equals its result exactly, in wei", async () => {
+    const { nav, scoreLeakage, markoutAlpha, holdings, sqrtPriceAtTick: sp, lossWad } = await import("./position");
+    for (const [poolTick, fairTick, laterTick] of [[-400, 0, 0], [0, 0, 240], [300, -200, 500]]) {
+      const S = sp(poolTick), F = sp(fairTick), T = sp(laterTick);
+      const { nw, idle } = rebalance(-1020, 180, S);
+      const [leak, navBefore] = scoreLeakage(OLD, [0n, 0n], S, nw, idle, S, F);
+      const navAfter = nav(holdings(nw, idle[0], idle[1], S, false), F, false);
+      expect(leak).toBe(navBefore - navAfter); // step 2
+      expect(navBefore).toBe(nav(holdings(OLD, 0n, 0n, S, true), F, true)); // step 1
+      const alpha = markoutAlpha(OLD, [0n, 0n], nw, idle, T, T);
+      const navNewT = nav(holdings(nw, idle[0], idle[1], T, false), T, false);
+      const navOldT = nav(holdings(OLD, 0n, 0n, T, true), T, true);
+      expect(alpha).toBe(navNewT - navOldT); // step 3
+      expect(lossWad(leak, navBefore) + lossWad(-alpha, navBefore)).toBeGreaterThanOrEqual(0n); // step 4 sum
+    }
+  });
+});

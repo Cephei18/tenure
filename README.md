@@ -3,6 +3,8 @@
 **We don't try to detect when an AI curator is compromised. We measure the damage its decisions cause, and its
 autonomy shrinks automatically when it starts losing depositors' money.**
 
+Try it: https://tenure-hazel.vercel.app/
+
 A Uniswap v4 hook (UHI11 hookathon, theme: Curated Liquidity). Every curator rebalance is scored at a fair
 oracle price, and losses drain a risk budget. The curator drops from FULL to RESTRICTED to FROZEN as the budget
 empties, and it can only earn more room (budget and deposit cap) with proven positive results.
@@ -214,7 +216,7 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
 
 ## Frontend: Tenure Lab
 
-**Tenure Lab**, hosted on Vercel, is a read-only page with no wallet
+**Tenure Lab** ([tenure-hazel.vercel.app](https://tenure-hazel.vercel.app/)), hosted on Vercel, is a read-only page with no wallet
 ([`frontend/`](frontend/README.md)). It has four sections and a demo mode:
 
 - **Overview:** the pitch and three live tiles read from Unichain Sepolia: vault A's tier, its budget, and vault
@@ -224,8 +226,8 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
   20-market sweep.
 - **Live proof:** the 8 proven testnet steps (restore, attack, freeze, Lasna reaction, relay to vault B, withdrawal
   while FROZEN), each linked to its transaction.
-- **How grading works:** drag a liquidity range and move the prices to see leakage and markout, with a "Show the
-  math" view of the formulas and exact values.
+- **How grading works:** drag a liquidity range and move the prices; a worked solution shows each formula, your
+  numbers substituted into it, and the result (leakage, markout, charge), in tokens or exact wei.
 - **Demo mode:** a scripted ~75 s tour for screen recording (`?demo=1`).
 
 The page's TypeScript math is an exact BigInt port. It matches all 1,992 differential-test vectors in

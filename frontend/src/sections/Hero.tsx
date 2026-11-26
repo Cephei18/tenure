@@ -10,7 +10,7 @@ export default function Hero() {
     <section id="overview" aria-labelledby="overview-title" className="mx-auto max-w-6xl px-4 pb-12 pt-10 sm:px-6 sm:pt-16">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Tenure · Uniswap v4 hook</p>
       <h1 id="overview-title" className="mt-2 max-w-3xl text-4xl font-bold leading-tight sm:text-5xl">
-        Don't detect the compromise. Measure the damage.
+        Don't just detect the compromise. Measure the damage.
       </h1>
       <p className="mt-4 max-w-xl text-lg text-soft">
         AI liquidity curators lose autonomy automatically when their decisions start losing depositors' money.

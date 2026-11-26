@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent } from "react";
-import { Sigma } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { Ceil, Fn, Frac, MATH_COLORS, N, Op, Result as MathResult, V } from "../components/math";
 import { Card, SectionHeader, Slider, fmtTok } from "../components/ui";
 import { WAD } from "../math/fixed";
 import { holdings, lossWad, markoutAlpha, nav, scoreLeakage, sqrtPriceAtTick } from "../math/position";
@@ -23,7 +23,6 @@ export default function Grading() {
   const [poolTick, setPool] = useState(-400);
   const [fairTick, setFair] = useState(0);
   const [laterTick, setLater] = useState(0);
-  const [showMath, setShowMath] = useState(false);
   const svg = useRef<SVGSVGElement>(null);
   const drag = useRef<{ kind: Drag; grab: number }>({ kind: null, grab: 0 });
 
@@ -141,57 +140,108 @@ export default function Grading() {
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Result title="Holdings value" value={fmtTok(weiToTokens(r.navBefore))} tone={tokens.color.text}
-          meaning="What the vault holds, priced by the oracle, not the pool." />
-        <Result title="Leakage" value={signedTok(r.leak, "lost")} tone={r.leak > 0n ? tokens.color.frozen : tokens.color.full}
-          meaning="Value lost by trading at a pool price that is off fair." />
-        <Result title="Markout vs did nothing" value={signedTok(-r.alpha, "worse", "better")} tone={r.alpha < 0n ? tokens.color.frozen : tokens.color.full}
-          meaning="Later, the new range against leaving the old one alone." />
-      </div>
-
-      <Card className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-lg font-semibold">
-          Charged to the budget: <span className="num" style={{ color: r.totalW > 0n ? tokens.color.frozen : tokens.color.full }}>{pctOf(r.totalW).toFixed(3)}% of NAV</span>
-          <span className="ml-2 text-sm font-normal text-soft">= {(pctOf(r.totalW) / 2 * 100).toFixed(0)}% of a 2% bucket</span>
-        </div>
-        <button type="button" onClick={() => setShowMath((m) => !m)} aria-expanded={showMath}
-          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-border px-4 text-sm hover:border-accent">
-          <Sigma size={16} aria-hidden /> {showMath ? "Hide the math" : "Show the math"}
-        </button>
-      </Card>
-
-      {showMath && (
-        <Card className="space-y-3 text-sm">
-          <Formula f="H = position(range, L, S) + idle" v={`before: ${wei(r.hBefore[0])} token0, ${wei(r.hBefore[1])} token1 (at pool S)`} />
-          <Formula f="NAV(H, P*) = amount0 · P* + amount1" v={`before ${wei(r.navBefore)} at fair; the pool price would say ${wei(r.navAtSpot)}`} />
-          <Formula f="L_imm = NAV(H_before, P*) − NAV(H_after, P*)" v={`${wei(r.navBefore)} − ${wei(r.navAfter)} = ${wei(r.leak)} (swapped ${wei(r.swapped0)} token0 at S)`} />
-          <Formula f="α = NAV(H_new at S_T, P*_T) − NAV(H_old at S_T, P*_T)" v={`${wei(r.navNewT)} − ${wei(r.navOldT)} = ${wei(r.alpha)}`} />
-          <Formula f="charged = ⌈max(0, L_imm) / NAV⌉ + ⌈max(0, −α) / NAV⌉" v={`${r.leakW} + ${r.alphaW} = ${r.totalW} (WAD, rounded up against the curator)`} />
-          <p className="text-xs text-muted">All values in wei (18 decimals). Ports of PositionValue.sol and DecisionScore.sol; the swap sizing and LiquidityAmounts only build the example.</p>
-        </Card>
-      )}
+      <Solution r={r} pFair={priceOf(fairTick)} pPool={priceOf(poolTick)} pLater={priceOf(laterTick)} />
     </section>
   );
 }
 
-const wei = (v: bigint) => v.toLocaleString("en-US");
-function signedTok(v: bigint, pos: string, neg = "gained") {
-  const t = weiToTokens(v < 0n ? -v : v);
-  if (t < 0.01) return v === 0n ? "0" : `${(v < 0n ? -v : v).toLocaleString("en-US")} wei (rounding)`;
-  return `${fmtTok(t, 2)} ${v > 0n ? pos : neg}`;
+// ------------------------------------------------------------------------------------------------ worked solution
+type Graded = {
+  hBefore: readonly [bigint, bigint]; navBefore: bigint; navAfter: bigint; leak: bigint; leakW: bigint;
+  alpha: bigint; alphaW: bigint; navNewT: bigint; navOldT: bigint; totalW: bigint;
+};
+
+function Solution({ r, pFair, pPool, pLater }: { r: Graded; pFair: number; pPool: number; pLater: number }) {
+  const [unit, setUnit] = useState<"tokens" | "wei">(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("units") === "wei" ? "wei" : "tokens";
+    } catch {
+      return "tokens";
+    }
+  });
+  // magnitude only; `signed` adds the sign once (BigInt's own "-" would double it)
+  const amt = (v: bigint) => {
+    const m = v < 0n ? -v : v;
+    return unit === "wei" ? m.toLocaleString("en-US") : fmtTok(weiToTokens(m), 2);
+  };
+  const signed = (v: bigint) => `${v < 0n ? "−" : ""}${amt(v)}`;
+  const pct = (w: bigint) => `${pctOf(w).toFixed(3)}%`;
+  const price = (p: number) => p.toFixed(4);
+  const lossColor = (bad: boolean) => (bad ? tokens.color.frozen : tokens.color.full);
+  const bucketShare = (pctOf(r.totalW) / 2) * 100;
+
+  return (
+    <Card className="space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
+        <h3 className="text-lg font-semibold">Worked solution</h3>
+        <div role="radiogroup" aria-label="Units" className="flex overflow-hidden rounded-xl border border-border text-sm">
+          {(["tokens", "wei"] as const).map((u) => (
+            <button key={u} type="button" role="radio" aria-checked={unit === u} onClick={() => setUnit(u)}
+              className={`min-h-9 px-3 ${unit === u ? "bg-surface2 text-text" : "text-soft"}`}>
+              {u === "tokens" ? "Tokens" : "Exact (wei)"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Step n={1} title="Value at the fair price" meaning="Holdings priced by the oracle, never by the pool."
+        formula={<><Fn>NAV</Fn><Op>=</Op><V sub="0">a</V><Op>·</Op><V sup="*" color={MATH_COLORS.fair}>P</V><Op>+</Op><V sub="1">a</V></>}
+        subst={<><N>{amt(r.hBefore[0])}</N><Op>×</Op><N color={MATH_COLORS.fair}>{price(pFair)}</N><Op>+</Op><N>{amt(r.hBefore[1])}</N></>}
+        result={<MathResult value={amt(r.navBefore)} color={tokens.color.text}>{amt(r.navBefore)}</MathResult>}
+        note={<>holdings taken at the pool price <V color={MATH_COLORS.pool}>S</V> = <N color={MATH_COLORS.pool}>{price(pPool)}</N></>}
+      />
+
+      <Step n={2} title="Leakage" meaning="Value lost by trading at a pool price off fair."
+        formula={<><V sub="imm">L</V><Op>=</Op><Fn>NAV</Fn><sub className="text-[0.68em]">before</sub><Op>−</Op><Fn>NAV</Fn><sub className="text-[0.68em]">after</sub></>}
+        subst={<><N>{amt(r.navBefore)}</N><Op>−</Op><N>{amt(r.navAfter)}</N></>}
+        result={<MathResult value={signed(r.leak)} color={lossColor(r.leak > 0n)}>{signed(r.leak)}</MathResult>}
+        note={<>both valued at <V sup="*" color={MATH_COLORS.fair}>P</V>; positive means lost</>}
+      />
+
+      <Step n={3} title="Markout vs did nothing" meaning="Later, the new range against leaving the old one alone."
+        formula={<><V>α</V><Op>=</Op><Fn>NAV</Fn><sub className="text-[0.68em]">new</sub>(<V color={MATH_COLORS.later}>T</V>)<Op>−</Op><Fn>NAV</Fn><sub className="text-[0.68em]">old</sub>(<V color={MATH_COLORS.later}>T</V>)</>}
+        subst={<><N>{amt(r.navNewT)}</N><Op>−</Op><N>{amt(r.navOldT)}</N></>}
+        result={<MathResult value={signed(r.alpha)} color={lossColor(r.alpha < 0n)}>{signed(r.alpha)}</MathResult>}
+        note={<>price <V color={MATH_COLORS.later}>T</V> = <N color={MATH_COLORS.later}>{price(pLater)}</N>, W blocks later; negative means worse</>}
+      />
+
+      <Step n={4} title="Charged to the budget" meaning="Both losses as a share of NAV, rounded up."
+        formula={<>
+          <V>c</V><Op>=</Op>
+          <Ceil><Frac num={<><Fn>max</Fn>(0, <V sub="imm">L</V>)</>} den={<Fn>NAV</Fn>} /></Ceil>
+          <Op>+</Op>
+          <Ceil><Frac num={<><Fn>max</Fn>(0, −<V>α</V>)</>} den={<Fn>NAV</Fn>} /></Ceil>
+        </>}
+        subst={<><N>{pct(r.leakW)}</N><Op>+</Op><N>{pct(r.alphaW)}</N></>}
+        result={<MathResult value={pct(r.totalW)} color={lossColor(r.totalW > 0n)}>{pct(r.totalW)} of NAV</MathResult>}
+        note={<><N>{bucketShare.toFixed(0)}%</N> of a 2% bucket{bucketShare >= 80 ? ": one decision like this freezes the curator" : ""}</>}
+        last
+      />
+      <p className="pt-2 text-xs text-muted">
+        {unit === "tokens" ? "Rounded for display; computed exactly in wei." : "Exact integers (18 decimals), as the hook computes them."}
+      </p>
+    </Card>
+  );
 }
 
-const Result = ({ title, value, meaning, tone }: { title: string; value: string; meaning: string; tone: string }) => (
-  <Card className="space-y-1">
-    <div className="text-sm text-soft">{title}</div>
-    <div className="num text-2xl font-semibold" style={{ color: tone }}>{value}</div>
-    <div className="text-sm text-muted">{meaning}</div>
-  </Card>
-);
-const Formula = ({ f, v }: { f: string; v: string }) => (
-  <div>
-    <div className="font-mono text-accent">{f}</div>
-    <div className="num break-all font-mono text-xs text-soft">{v}</div>
-  </div>
-);
+function Step(props: { n: number; title: string; meaning: string; formula: ReactNode; subst: ReactNode; result: ReactNode; note: ReactNode; last?: boolean }) {
+  const { n, title, meaning, formula, subst, result, note, last } = props;
+  return (
+    <div className={`grid gap-3 py-4 sm:grid-cols-[230px_1fr] ${last ? "" : "border-b border-border"}`}>
+      <div className="flex gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-accent">{n}</span>
+        <div>
+          <div className="font-semibold">{title}</div>
+          <div className="text-xs text-muted">{meaning}</div>
+        </div>
+      </div>
+      <div className="min-w-0 space-y-1.5 text-base sm:text-lg">
+        <div className="flex flex-wrap items-center text-text">{formula}</div>
+        <div className="flex flex-wrap items-center break-all">
+          <Op>=</Op>{subst}<Op>=</Op>{result}
+        </div>
+        <div className="text-xs text-soft">{note}</div>
+      </div>
+    </div>
+  );
+}

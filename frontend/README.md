@@ -1,6 +1,6 @@
 # Tenure Lab
 
-A judge-facing, read-only frontend for Tenure, hosted on Vercel.
+A judge-facing, read-only frontend for Tenure, hosted on Vercel: https://tenure-hazel.vercel.app/
 
 No wallet, no keys, no transactions. Every number on the page comes from one of three places:
 1. **The chain:** read-only calls to the deployed contracts on Unichain Sepolia.
@@ -23,7 +23,7 @@ npm run preview  # serve dist/ at http://localhost:4173/
 The ABI fragments in `src/abi/` were copied from Foundry's build output. To refresh them after `forge build` at the
 repo root, run `npm run abi`. `npm run tokens` re-exports the design tokens (below).
 
-URL options: `?demo=1` starts the demo tour on load (for screen recording); `?tune=1` opens the Tune drawer;
+URL options: `?demo=1` starts the demo tour on load (for screen recording); `?tune=1` opens the Tune drawer; `?units=wei` shows the worked solution in exact wei;
 `?rpc=<url>` picks the Unichain Sepolia RPC.
 
 ## Sections: what the user can do
@@ -33,7 +33,7 @@ URL options: `?demo=1` starts the demo tour on load (for screen recording); `?tu
 | **Overview** | See the pitch and three live tiles: vault A's tier, a budget gauge with the 20% / 50% thresholds, vault B's `relayFrozen()`. "Run the attack" jumps to the Simulator and plays B vs C; "Watch demo mode" starts the tour. | viem reads of the deployed hook and vaults |
 | **Simulator** | Pick a scenario (honest, poisoned + static caps, poisoned + Tenure) or **Compare B vs C** side by side. Play, pause, scrub (markers for poisoning, attack rounds, RESTRICTED, FROZEN), 1x / 2x / 4x. Watch the budget ring, tier badge, NAV line, charged-loss counter and event toasts ("Attack round 2 · vault leaks 91.7 at once"). Open **Tune Tenure** to change bucket size, refill time, thresholds and a static cap: the real losses are re-scored live ("Freezes after 9 of 52 decisions · loss 2,471 vs 8,376"). Below: the 20-market sweep and three headline numbers. | `docs/results/headline.csv`, `losses.csv`, `sweep.csv`; RiskBudget port |
 | **Live proof** | Follow the 8 proven steps (Unichain → Lasna → Unichain → withdraw), each with one line and an explorer link; read "read from chain at block N"; refresh; change the RPC. Falls back to the last recorded values behind a banner when the RPC is down. | viem reads; `src/data/timeline.ts` (every hash checked against the docs); `src/data/live-snapshot.json` |
-| **How grading works** | Drag a liquidity range (or its edges, also with arrow keys), move the fair price, the pool price at the decision and the price W blocks later. Three tiles: holdings value, leakage, markout vs did nothing, each with a one-line meaning. **Show the math** reveals the formulas with exact wei values. | Ports of PositionValue and DecisionScore; `src/math/example.ts` builds the rebalance |
+| **How grading works** | Drag a liquidity range (or its edges, also with arrow keys), move the fair price, the pool price at the decision and the price W blocks later. An always-visible **worked solution** shows each step as a typeset formula, the same formula with your numbers substituted, and the result (value at the fair price, leakage, markout vs did nothing, charge to the budget); results flash as they change. Toggle tokens or exact wei. | Ports of PositionValue and DecisionScore; `src/math/example.ts` builds the rebalance |
 | **Demo mode** | A ~75 s scripted tour: spotlight + caption bar, plays B vs C through the freeze, the sweep, the live relay and the withdrawal. Pause, skip, exit (Esc). | Same data; captions' numbers are tested against it |
 
 Honesty notes: the Simulator's counter is the **loss the hook charged to the curator** (from the recorded scoring
@@ -86,7 +86,7 @@ Screenshots of every section at 1440 px and 390 px, and of demo mode mid-run, ar
 
 ## Deploy
 
-**Vercel** (the live site): import the repo, set **Root Directory** to `frontend`, and keep the Vite defaults
+**Vercel** (the live site, https://tenure-hazel.vercel.app/): import the repo, set **Root Directory** to `frontend`, and keep the Vite defaults
 (build `npm run build`, output `dist`). No `vercel.json` or environment variables are needed; the base path is `/`.
 The build imports five files from **outside** `frontend/`, which Vercel must include. Its project setting
 "Include files outside the root directory in the Build Step" covers this, and is on by default:
