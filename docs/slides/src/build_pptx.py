@@ -89,7 +89,7 @@ class Deck:
         return shp
 
     def text(self, s, x, y, w, h, content, size=24, color=None, bold=False, align=PP_ALIGN.LEFT,
-             anchor=MSO_ANCHOR.TOP, spacing=None, caps=False, line_spacing=1.15, name=None):
+             anchor=MSO_ANCHOR.TOP, spacing=None, caps=False, line_spacing=1.15, name=None, link=None):
         """content: str, or list of paragraphs; a paragraph is a str or a list of (text, color, bold[, size])."""
         tb = s.shapes.add_textbox(E(x), E(y), E(w), E(h))
         if name:
@@ -114,6 +114,9 @@ class Deck:
                 f.size = Pt(sz / 2)
                 f.bold = b
                 f.color.rgb = rgb(c)
+                if link:
+                    r.hyperlink.address = link
+                    f.color.rgb = rgb(c)  # keep the theme colour, not the default hyperlink blue
                 if spacing:
                     rPr = r._r.get_or_add_rPr()
                     rPr.set("spc", str(int(spacing * 100)))
@@ -129,9 +132,39 @@ class Deck:
         pic._element.nvPicPr.cNvPr.set("descr", alt)
         return pic
 
+    def shot(self, s, path, x, y, w, vis_h=None, top=0, alt=""):
+        """A screenshot with a 2 px border, optionally cropped to vis_h slide px starting `top` px down."""
+        iw, ih = Image.open(path).size
+        full_h = w * ih / iw
+        vis_h = vis_h or full_h
+        pic = s.shapes.add_picture(str(path), E(x), E(y), E(w), E(vis_h))
+        pic.crop_top = top / full_h
+        pic.crop_bottom = max(0.0, 1 - (top + vis_h) / full_h)
+        pic._element.nvPicPr.cNvPr.set("descr", alt)
+        self.box(s, x, y, w, vis_h, fill=None, line=C["border"], lw=2, r=12)
+        return pic
+
     def kicker_title(self, s, kicker, title):
         self.text(s, 96, 84, 1728, 34, kicker, 22, C["accent"], True, caps=True, spacing=3.5)
         self.text(s, 96, 116, 1728, 80, title, 60, C["text"], True, line_spacing=1.0)
+
+
+def theme_hyperlinks(path: Path, color: str) -> None:
+    """PowerPoint paints hyperlinks with the theme's hlink colour (default dark blue, unreadable on this background)
+    and ignores the run colour, so set hlink/folHlink in every theme part to the deck's accent."""
+    import zipfile
+    tmp = path.with_suffix(".tmp")
+    hexv = color.lstrip("#").upper()
+    with zipfile.ZipFile(path) as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.startswith("ppt/theme/theme") and item.filename.endswith(".xml"):
+                x = data.decode("utf-8")
+                for tag in ("hlink", "folHlink"):
+                    x = re.sub(rf"<a:{tag}>.*?</a:{tag}>", f'<a:{tag}><a:srgbClr val="{hexv}"/></a:{tag}>', x, flags=re.S)
+                data = x.encode("utf-8")
+            zout.writestr(item, data)
+    tmp.replace(path)
 
 
 def build():
@@ -271,21 +304,22 @@ def build():
         d.text(s, x + 18, 888, 250, 28, lab, 19, muted)
     d.image(s, A / "A_architecture.png", 1012, 232, w=800, alt="Architecture diagram.")
 
-    # 8 live demo
+    # 8 live demo: 2x2 grid of 852 px cells (same geometry as deck.html)
     s = d.slide()
     d.kicker_title(s, "Live demo · Unichain Sepolia + Reactive Lasna", "The attack, live on testnet")
-    d.image(s, A / "H_lab_live.png", 96, 218, w=816, alt="Tenure Lab, Live proof section.")
-    d.image(s, A / "D_live_budget.png", 96, 576, w=720, alt="Vault A budget per tick, live Tick events.")
-    d.text(s, 96, 932, 900, 28, "Vault A risk budget, % of bucket, from the director's on-chain Tick events (ticks 1–90).", 19, muted)
-    d.image(s, A / "H_lab_simulator.png", 1012, 218, w=808, alt="Tenure Lab, Simulator section.")
+    d.text(s, 1224, 132, 600, 44, "https://tenure-hazel.vercel.app/", 30, acc, True, align=PP_ALIGN.RIGHT,
+           link="https://tenure-hazel.vercel.app/")
+    d.shot(s, A / "H_lab_overview.png", 96, 216, 852, vis_h=237, top=202, alt="Tenure Lab overview: live tiles (vault A FROZEN, budget 17.0%, vault B relayFrozen true).")
     for i, (t, col) in enumerate((("Poisoned at tick 20 → FROZEN at tick 25", C["frozen"]),
                                   ("Relayed to vault B in 2 blocks", acc),
                                   ("Depositor withdrew everything while FROZEN", C["full"]))):
-        y = 646 + i * 59
-        o = s.shapes.add_shape(MSO_SHAPE.OVAL, E(1012), E(y + 12), E(18), E(18))
+        y = 470 + i * 40
+        o = s.shapes.add_shape(MSO_SHAPE.OVAL, E(96), E(y + 13), E(14), E(14))
         o.fill.solid(); o.fill.fore_color.rgb = rgb(col); o.line.fill.background()
-        d.text(s, 1048, y, 780, 44, t, 29, txt, True)
-    d.text(s, 1012, 826, 800, 44, "cephei18.github.io/tenure", 28, acc, True)
+        d.text(s, 124, y, 820, 40, t, 27, txt, True, anchor=MSO_ANCHOR.MIDDLE)
+    d.shot(s, A / "H_lab_simulator.png", 972, 216, 852, vis_h=383, top=0, alt="Tenure Lab simulator, Compare B vs C at block 172: static caps FULL, Tenure FROZEN.")
+    d.shot(s, A / "H_lab_live_steps.png", 96, 618, 852, alt="Tenure Lab live proof: the 8 proven steps, relay to vault B 2 blocks later.")
+    d.image(s, A / "D_live_budget.png", 972, 618, w=852, alt="Vault A budget per tick, live Tick events: poisoned 20, RESTRICTED 23, FROZEN 25.")
 
     # 9 results
     s = d.slide()
@@ -300,7 +334,7 @@ def build():
     d.image(s, A / "F_results.png", 96, 404, w=840, alt="Slow bleed 9.52% vs 1.74% of NAV; attacker profit 1,587 vs 650 tokens.")
     d.image(s, A / "G_playground.png", 984, 404, w=840, alt="Losses let through: 8,376 / 8,376 / 2,471 tokens.")
     d.text(s, 96, 852, 1728, 40, [[("258", txt, True), (" Foundry + ", soft, False), ("53", txt, True), (" Python + ", soft, False),
-                                   ("25", txt, True), (" frontend tests · Python and Solidity agree to the wei on ", soft, False),
+                                   ("48", txt, True), (" frontend tests · Python and Solidity agree to the wei on ", soft, False),
                                    ("1,992", txt, True), (" vectors · ", soft, False), ("7", txt, True),
                                    (" invariants, ", soft, False), ("128,000", txt, True), (" random calls", soft, False)]], 25)
 
@@ -317,7 +351,7 @@ def build():
     d.text(s, 96, 694, 560, 30, "Code", 24, muted, caps=True, spacing=3)
     d.text(s, 96, 730, 620, 50, "github.com/Cephei18/tenure", 36, txt, True)
     d.text(s, 680, 694, 560, 30, "Tenure Lab", 24, muted, caps=True, spacing=3)
-    d.text(s, 680, 730, 620, 50, "cephei18.github.io/tenure", 36, acc, True)
+    d.text(s, 680, 730, 700, 50, "https://tenure-hazel.vercel.app/", 36, acc, True, link="https://tenure-hazel.vercel.app/")
     d.text(s, 96, 838, 600, 44, "Thank you.", 30, soft)
 
     assert len(notes) == len(d.prs.slides), (len(notes), len(d.prs.slides))
@@ -327,6 +361,7 @@ def build():
     d.prs.core_properties.title = "Tenure · UHI11"
     d.prs.core_properties.author = "Gopika Chauhan"
     d.prs.save(out)
+    theme_hyperlinks(out, C["accent"])
     print("wrote", out.relative_to(ROOT))
 
 

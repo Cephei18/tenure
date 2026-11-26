@@ -221,15 +221,17 @@ def live_budget():
     poison = 20
     restricted = next(x for x, k in zip(t, tier) if k == 1)
     frozen = next(x for x, k in zip(t, tier) if k == 2)
-    W, H = 820, 400
+    W, H = 852, 300  # slide 8 grid cell
     fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
-    ax = fig.add_axes([0.085, 0.13, 0.895, 0.83])
+    ax = fig.add_axes([0.075, 0.12, 0.91, 0.72])
+    fig.text(0.075, 0.93, "Vault A risk budget, live on Unichain Sepolia (director Tick events, ticks 1–90)",
+             fontsize=px(17), color=SOFT, fontweight=600, va="center")
     ax.set_facecolor(BG)
     for lo, hi, c in ((50, 105, FULL), (20, 50, RESTR), (0, 20, FROZ)):
         ax.axhspan(lo, hi, color=c, alpha=0.10, lw=0, zorder=0)
     for yv in (20, 50):
         ax.axhline(yv, color=BORDER, lw=px(2), zorder=1)
-    ax.text(89, 97, "FULL", color=FULL, fontsize=px(17), fontweight=700, ha="right", va="top")
+    ax.text(89, 96, "FULL", color=FULL, fontsize=px(17), fontweight=700, ha="right", va="top")
     ax.text(89, 47, "RESTRICTED", color=RESTR, fontsize=px(17), fontweight=700, ha="right", va="top")
     ax.text(89, 17, "FROZEN", color=FROZ, fontsize=px(17), fontweight=700, ha="right", va="top")
     ax.step(t, b, where="post", color=TEXT, lw=px(4), zorder=4)
@@ -250,7 +252,6 @@ def live_budget():
     ax.set_yticklabels(["0%", "20%", "50%", "100%"])
     ax.set_xticks([0, 20, 40, 60, 80])
     ax.tick_params(labelsize=px(16), length=0, pad=6)
-    ax.set_xlabel("demo tick (one tx per block, Unichain Sepolia)", fontsize=px(16), labelpad=4)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
     for s in ("left", "bottom"):
@@ -346,22 +347,10 @@ def playground():
     return {"unchecked": unchecked, "decisions": decisions}
 
 
-# ---------- H. Lab screenshots: crop the CDP captures ----------
-def lab_crops(shots_dir: str | None):
-    if not shots_dir:
-        return
-    from PIL import Image
-    # captures: 960x1500 CSS viewport at 2x, section scrolled to the top (docs/slides/README.md, "Screenshots")
-    crops = {"live": (36, 245, 1884, 1000), "simulator": (36, 245, 1884, 1135)}
-    for name, (l, t, r, b) in crops.items():
-        p = os.path.join(shots_dir, f"{name}.png")
-        if os.path.exists(p):
-            Image.open(p).crop((l, t, r, b)).save(os.path.join(ASSETS, f"H_lab_{name}.png"), optimize=True)
-            print("wrote", f"docs/slides/assets/H_lab_{name}.png")
+# ---------- H. Lab screenshots: captured from the live site by lab_screenshots.py (not generated here) ----------
 
 
 if __name__ == "__main__":
-    import sys
     os.makedirs(ASSETS, exist_ok=True)
     arch()
     lifecycle()
@@ -370,5 +359,4 @@ if __name__ == "__main__":
     relay()
     f = results()
     g = playground()
-    lab_crops(sys.argv[1] if len(sys.argv) > 1 else None)
     print(json.dumps({"D": d, "F": f, "G": g}, indent=1))

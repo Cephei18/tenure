@@ -19,7 +19,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: #000; height: 100%; overflow: hidden; }
 body { font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--text);
-  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+  -webkit-font-smoothing: antialiased; }
+.s9 .bigs b, .s7 .n b { font-variant-numeric: tabular-nums; }
 #stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
 .slide { position: absolute; inset: 0; width: 1920px; height: 1080px; padding: 84px 96px 0; background: var(--bg);
   display: none; overflow: hidden; }
@@ -121,13 +122,12 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 .s7 .arch { width: 812px; margin-top: 6px; }
 
 /* 8 demo */
-.s8 .grid { display: grid; grid-template-columns: 820px 812px; gap: 96px; margin-top: 28px; }
+.s8 .grid { display: grid; grid-template-columns: 852px 852px; gap: 20px 24px; margin-top: 26px; align-items: start; }
 .shot { border: 2px solid var(--border); border-radius: 12px; overflow: hidden; }
-.s8 .cap { font-size: 19px; color: var(--muted); margin: 6px 0 0; }
-.s8 .beats { margin-top: 26px; }
-.s8 .beat { display: flex; gap: 18px; align-items: center; font-size: 29px; font-weight: 600; padding: 12px 0; }
-.s8 .beat .d { width: 18px; height: 18px; border-radius: 50%; flex: none; }
-.s8 .link { margin-top: 18px; font-size: 28px; font-weight: 700; color: var(--accent); }
+.s8 .url { text-decoration: none; position: absolute; right: 96px; top: 136px; font-size: 30px; font-weight: 700; color: var(--accent); }
+.s8 .beats { margin-top: 18px; }
+.s8 .beat { display: flex; gap: 14px; align-items: center; font-size: 27px; font-weight: 600; height: 40px; }
+.s8 .beat .d { width: 14px; height: 14px; border-radius: 50%; flex: none; }
 
 /* 9 results */
 .s9 .bigs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 34px; }
@@ -148,6 +148,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 .s10 .card.t .w { color: var(--accent); }
 .s10 .links { margin-top: 96px; display: flex; gap: 64px; font-size: 36px; font-weight: 700; }
 .s10 .links span { color: var(--muted); font-weight: 400; font-size: 24px; display: block; margin-bottom: 6px; letter-spacing: .14em; text-transform: uppercase; }
+.s10 .links a { color: inherit; text-decoration: none; }
 .s10 .thanks { margin-top: 64px; font-size: 30px; color: var(--soft); }
 
 @page { size: 1920px 1080px; margin: 0; }
@@ -344,25 +345,23 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
 <section class="slide s8">
   <div class="kicker">Live demo · Unichain Sepolia + Reactive Lasna</div>
   <h2>The attack, live on testnet</h2>
+  <a class="url" href="https://tenure-hazel.vercel.app/">https://tenure-hazel.vercel.app/</a>
   <div class="grid">
     <div>
-      <div class="shot"><img src="assets/H_lab_live.png" width="816" alt="Tenure Lab, Live proof section: vault A curator FROZEN, budget 17.0%, 1,000,000 shares left; the proven live sequence with block numbers."></div>
-      <img src="assets/D_live_budget.png" width="720" style="margin-top:20px" alt="Vault A risk budget per demo tick on Unichain Sepolia: 100% until tick 20, then 94.4, 94.9, 73.5, 47.3 (RESTRICTED, tick 23), 32.3, 15.1 (FROZEN, tick 25), 7.7.">
-      <div class="cap">Vault A risk budget, % of bucket, from the director's on-chain Tick events (ticks 1&ndash;90).</div>
-    </div>
-    <div>
-      <div class="shot"><img src="assets/H_lab_simulator.png" width="808" alt="Tenure Lab, Simulator section: replay of the real attack; static caps stay FULL with 25 attack rounds, Tenure FROZEN after 3."></div>
+      <div class="shot" style="height:237px"><img src="assets/H_lab_overview.png" width="852" style="margin-top:-202px" alt="Tenure Lab overview: live tiles read from Unichain Sepolia, vault A tier FROZEN, budget 17.0%, vault B relayFrozen true."></div>
       <div class="beats">
         <div class="beat"><span class="d" style="background:var(--frozen)"></span>Poisoned at tick 20 &#8594; FROZEN at tick 25</div>
         <div class="beat"><span class="d" style="background:var(--accent)"></span>Relayed to vault B in 2 blocks</div>
         <div class="beat"><span class="d" style="background:var(--full)"></span>Depositor withdrew everything while FROZEN</div>
       </div>
-      <div class="link">cephei18.github.io/tenure</div>
     </div>
+    <div class="shot" style="height:383px"><img src="assets/H_lab_simulator.png" width="852" alt="Tenure Lab simulator, Compare B vs C at block 172, just after run C's FROZEN marker: static caps 98% budget, FULL; Tenure 4% budget, FROZEN."></div>
+    <div class="shot"><img src="assets/H_lab_live_steps.png" width="852" alt="Tenure Lab live proof: the 8 proven steps on Unichain Sepolia and Reactive Lasna, including the relay to vault B 2 blocks later."></div>
+    <img src="assets/D_live_budget.png" width="852" alt="Vault A risk budget per demo tick on Unichain Sepolia: 100% until tick 20, then 94.4, 94.9, 73.5, 47.3 (RESTRICTED, tick 23), 32.3, 15.1 (FROZEN, tick 25), 7.7.">
   </div>
   <div class="foot"><span>Tenure · UHI11</span><span>8</span></div>
   <aside class="notes"><ul>
-    <li>This is where I switch to the screen recording of the Tenure Lab.</li>
+    <li>This is where I switch to the screen recording of the Tenure Lab, live at https://tenure-hazel.vercel.app/.</li>
     <li>Poisoned at tick 20. RESTRICTED at 23, FROZEN at 25: three blocks after the first drop. Safe mode at 26.</li>
     <li>Later the guardian restored it to RESTRICTED, the attack re-froze it, and Reactive relayed that freeze to vault B in 2 blocks.</li>
     <li>Then the depositor redeemed every share of the frozen vault in one transaction. Exit is never blocked.</li>
@@ -382,7 +381,7 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     <img src="assets/F_results.png" width="840" alt="Slow bleed value lost: static caps 9.52% of NAV, Tenure 1.74%. Attacker profit, median of 20 seeds: static caps 1,587 tokens, Tenure 650.">
     <img src="assets/G_playground.png" width="840" alt="Losses let through over 52 decisions: no check 8,376 tokens; 0.2% static cap 8,376 (blocks 0 of 52); Tenure 2,471 (FROZEN after 9 of 52).">
   </div>
-  <div class="rigor"><b>258</b> Foundry + <b>53</b> Python + <b>25</b> frontend tests &middot; Python and Solidity agree to the wei on <b>1,992</b> vectors &middot; <b>7</b> invariants, <b>128,000</b> random calls</div>
+  <div class="rigor"><b>258</b> Foundry + <b>53</b> Python + <b>48</b> frontend tests &middot; Python and Solidity agree to the wei on <b>1,992</b> vectors &middot; <b>7</b> invariants, <b>128,000</b> random calls</div>
   <div class="foot"><span>Tenure · UHI11</span><span>9</span></div>
   <aside class="notes"><ul>
     <li>20 seeded runs of the same attack: Tenure froze the poisoned curator in all 20, 60 to 76 blocks after poisoning.</li>
@@ -403,15 +402,15 @@ body.show-notes .slide.active .notes { display: block; position: absolute; left:
     <div class="card t"><div class="w">Tenure</div><b>acts automatically, at the moment of every decision.</b></div>
   </div>
   <div class="links">
-    <div><span>Code</span>github.com/Cephei18/tenure</div>
-    <div><span>Tenure Lab</span><span style="display:inline;letter-spacing:0;text-transform:none;font-size:36px;font-weight:700;color:var(--accent)">cephei18.github.io/tenure</span></div>
+    <div><span>Code</span><a href="https://github.com/Cephei18/tenure">github.com/Cephei18/tenure</a></div>
+    <div><span>Tenure Lab</span><span style="display:inline;letter-spacing:0;text-transform:none;font-size:36px;font-weight:700;color:var(--accent)"><a href="https://tenure-hazel.vercel.app/">https://tenure-hazel.vercel.app/</a></span></div>
   </div>
   <div class="thanks">Thank you.</div>
   <div class="foot"><span>Tenure · UHI11</span><span>10</span></div>
   <aside class="notes"><ul>
     <li>Scorecards tell you after the damage. Guardians need someone awake.</li>
     <li>Tenure acts automatically, at the moment of every decision.</li>
-    <li>Code and the live Lab are linked here. Thank you.</li>
+    <li>Code is on GitHub; the live Lab is at https://tenure-hazel.vercel.app/. Thank you.</li>
   </ul></aside>
 </section>
 
