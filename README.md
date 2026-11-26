@@ -32,7 +32,7 @@ The honest curator was never restricted (FULL in every block of every seed). Sou
   attack: poison the curator into placing liquidity at a manipulated price, then trade against it. No theft
   transaction ever happens.
 
-## The four layers
+## How it works: four layers
 
 1. **Mandate.** Bounds the depositors agreed to: range width, maximum distance from the fair price, maximum value
    swapped per action, cooldown. Changes are timelocked, so depositors can exit first.
@@ -45,6 +45,18 @@ The honest curator was never restricted (FULL in every block of every seed). Sou
    hook itself measured. There is no external, Sybil-prone score.
 
 Withdrawals are always open: no tier check, no oracle, no price.
+
+## Comparison to existing approaches
+
+| Approach | What it bounds | What it misses | Tenure |
+|---|---|---|---|
+| Bounded-leakage managers (Arrakis: an off-chain, trusted manager limited by static per-action / per-block limits) | The size of any single bad action | A slow bleed of many small, individually valid actions; the limits never tighten after losses | Scores every action at the fair price and accumulates the damage, so a 3-round bleed ends in FROZEN |
+| Guardians and timelocks (Morpho and Yearn vault curators) | Configuration changes: depositors get time to exit before new parameters apply | The outcome of decisions made inside an unchanged configuration | Keeps a timelocked mandate, and also grades every decision made inside it |
+| Curator scorecards and risk ratings | Nothing on-chain: they inform depositors after the fact | Enforcement; they rely on external, gameable data | Reputation is measured by the hook itself and enforced on-chain (budget, tier, deposit cap) |
+| Agent spending limits (e.g. Kusari-style per-agent limits) | How much value an agent may move | Whether the moves lose value: an LP rebalance at a bad price moves "allowed" amounts | Measures the value lost by each move at the fair price, and shrinks autonomy as losses add up |
+
+The difference in one line: other approaches limit what a curator may do. Tenure measures what its decisions
+actually cost depositors, and grants or withdraws autonomy based on that.
 
 ## Theme mapping: Curated Liquidity, active management and curation
 
@@ -72,22 +84,70 @@ flowchart LR
   PM -->|afterSwap: settle due markouts| H
   H -->|fair price| O[Chainlink adapter]
   V -->|endRebalance: score, charge budget, tier| H
-  R[Reactive Network] -->|settleMany / freeze| H
+  R[Reactive Network] -->|settleMany| H
+  R -->|relayFreeze| V2[Same curator's other vault]
 ```
 
-## Sponsor integrations
+## Partner integrations
 
-- **Chainlink is the fair price.** `ChainlinkReferencePrice` turns token/USD feeds (or a direct feed) into the
-  fair `sqrtPriceX96` that every score uses. Stale, incomplete or non-positive answers revert. Feeds are set once
-  per pool. ([`src/ChainlinkReferencePrice.sol`](src/ChainlinkReferencePrice.sol)) On Unichain Sepolia the feeds
-  update only about every 24 h, so the testnet pool uses a 25 h maximum oracle age. Mainnet feeds update far more
-  often, so a mainnet pool would use a much shorter maximum age.
-- **Reactive Network makes settlement keeper-free and propagates freezes across vaults.** `TenureSettlerRC` watches
-  `RebalanceScored` plus a CRON topic and calls `settleMany` through a callback receiver. `TenureFreezeRC` relays a
-  FROZEN tier on one vault to the same curator's vault elsewhere. The relay can only freeze, never unfreeze or move
-  funds. ([`src/reactive/`](src/reactive))
-- **Unichain is the L2 home.** On 1-second blocks, Tenure's overhead is about $0.016 per rebalance instead of $16
-  on mainnet. Deploy scripts target Unichain Sepolia + Lasna ([`docs/DEPLOY.md`](docs/DEPLOY.md)).
+Only integrations that are built, tested and deployed are listed.
+
+### Chainlink: the fair price
+
+`ChainlinkReferencePrice` turns two token/USD feeds (or one direct feed) into the fair `sqrtPriceX96` that every
+score uses. Stale, incomplete or non-positive answers revert, and feeds are set once per pool. On Unichain Sepolia
+the feeds update only about every 24 h, so the testnet pool uses a 25 h maximum oracle age (a mainnet pool would
+use a much shorter one).
+
+- Source: [`src/ChainlinkReferencePrice.sol`](src/ChainlinkReferencePrice.sol),
+  [`src/libraries/ChainlinkPriceLib.sol`](src/libraries/ChainlinkPriceLib.sol),
+  [`src/interfaces/AggregatorV3Interface.sol`](src/interfaces/AggregatorV3Interface.sol) (vendored interface).
+- Tests: [`test/ChainlinkReferencePrice.t.sol`](test/ChainlinkReferencePrice.t.sol),
+  [`test/diff/ChainlinkPriceDiff.t.sol`](test/diff/ChainlinkPriceDiff.t.sol) (Solidity vs Python vectors),
+  mock feed [`test/utils/MockAggregator.sol`](test/utils/MockAggregator.sol).
+- Deploy wiring: [`script/DeployUnichainSepolia.s.sol`](script/DeployUnichainSepolia.s.sol) (`_deployChainlinkPool`),
+  feed addresses in [`deployments/config.json`](deployments/config.json).
+- Live (Unichain Sepolia): adapter `0x73D4eCcA7B3E1c093D8c140e0F831D09CA4478B0`, wired for pool B
+  `0x4428202844c5e9a79fca58ab9518f652f51aa005a17870a8ef13089620113a48` (vault B
+  `0x68d4571Fb9720d26353F643d0B4Bc56E044F442A`) to the live Chainlink ETH/USD
+  `0xd9c93081210dFc33326B2af4C2c11848095E6a9a` and USDC/USD `0x25DdD2fEd0d51fe79d292Da47dd9f10AbdB4b3EC` feeds
+  (read back with `feedsOf(poolB)`).
+
+### Reactive Network: keeper-free settlement and cross-vault freeze relay
+
+`TenureSettlerRC` watches `RebalanceScored`, `MarkoutSettled` and a cron topic, and asks `TenureReactiveReceiver`
+to call the hook's permissionless `settleMany`. `TenureFreezeRC` relays a FROZEN tier on one vault to the same
+curator's other vault through `TenureFreezeReceiver`. The relay can only freeze, never unfreeze or move funds.
+
+- Source: [`src/reactive/TenureSettlerRC.sol`](src/reactive/TenureSettlerRC.sol),
+  [`src/reactive/TenureFreezeRC.sol`](src/reactive/TenureFreezeRC.sol),
+  [`src/reactive/TenureReactiveReceiver.sol`](src/reactive/TenureReactiveReceiver.sol),
+  [`src/reactive/TenureFreezeReceiver.sol`](src/reactive/TenureFreezeReceiver.sol). Built on `reactive-lib-omni`.
+- Tests: [`test/reactive/ReactiveSettlement.t.sol`](test/reactive/ReactiveSettlement.t.sol),
+  [`test/reactive/FreezePropagation.t.sol`](test/reactive/FreezePropagation.t.sol),
+  [`test/reactive/ReactiveConformance.t.sol`](test/reactive/ReactiveConformance.t.sol), on the conformance
+  simulator [`test/reactive/utils/ReactiveNetworkSim.sol`](test/reactive/utils/ReactiveNetworkSim.sol) (bills,
+  blacklists and injects the requesting RC like the live network).
+- Deploy and verification: [`script/DeployReceivers.s.sol`](script/DeployReceivers.s.sol) (Unichain),
+  [`script/DeployLasna.s.sol`](script/DeployLasna.s.sol) (Lasna),
+  [`script/base/ReactiveWiring.sol`](script/base/ReactiveWiring.sol) (reserves via `depositTo`),
+  [`script/CheckReactive.s.sol`](script/CheckReactive.s.sol) (read-only check of both chains).
+- Live: `TenureFreezeRC` `0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F` and `TenureSettlerRC`
+  `0xfB5F3B736A5A0b5F244d629D36d876333B3FB646` on Lasna; `TenureFreezeReceiver`
+  `0x846698c02b01Ea6126deb50705338D812878E5FD` and `TenureReactiveReceiver`
+  `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0` on Unichain Sepolia. Freeze relay verified live:
+  [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696)
+  ([`docs/INCIDENT_REACTIVE.md`](docs/INCIDENT_REACTIVE.md#live-verification-2026-11-26)).
+
+### Unichain: the L2 home
+
+On 1-second blocks, Tenure's overhead is about $0.016 per rebalance instead of about $16 on mainnet.
+
+- Deploy: [`script/DeployUnichainSepolia.s.sol`](script/DeployUnichainSepolia.s.sol) (hook, pools, vaults, oracles,
+  demo actors), [`script/base/TenureHookDeployer.sol`](script/base/TenureHookDeployer.sol) (CREATE2 hook address),
+  [`script/demo_testnet.sh`](script/demo_testnet.sh) (live demo), guide [`docs/DEPLOY.md`](docs/DEPLOY.md).
+- Addresses: [`deployments/1301.json`](deployments/1301.json); hook `0xBe78c4327a48414e0C9701a3B5840da39D828A40`,
+  full table under "Live on testnet" below.
 
 ## Cost ([`docs/GAS.md`](docs/GAS.md))
 
@@ -180,9 +240,15 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
 
 ## How to run
 
+Requirements: Foundry, Python 3 with `pytest` and `matplotlib`.
+
 ```bash
+git clone --recursive https://github.com/Cephei18/tenure.git && cd tenure
+# (already cloned without --recursive: git submodule update --init --recursive)
+forge build
 forge test                                   # full suite (default profile)
 FOUNDRY_PROFILE=deploy forge test            # what ships: via-IR build
+forge test --match-path "test/reactive/*"    # Reactive integration + conformance simulator only
 python -m pytest sim -q                      # Python reference model + test-vector freshness
 python sim/plot_results.py                   # regenerate charts from docs/results/*.csv
 ```
@@ -199,6 +265,28 @@ Testnet (Unichain Sepolia + Reactive Lasna): [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 Further reading: [`docs/MATH.md`](docs/MATH.md) (scoring math), [`docs/RESULTS.md`](docs/RESULTS.md),
 [`docs/GAS.md`](docs/GAS.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+
+## Credits and third-party code
+
+Dependencies are git submodules under `lib/`, pinned in [`foundry.lock`](foundry.lock); none of them is modified.
+
+| Component | Source (pinned) | Used for |
+|---|---|---|
+| Uniswap v4-template | github.com/uniswapfoundation/v4-template (initial commit `b8fde17`; its README kept as [`docs/TEMPLATE_README.md`](docs/TEMPLATE_README.md)) | Project scaffold. Files kept from it: `script/01_CreatePoolAndAddLiquidity.s.sol`, `script/02_AddLiquidity.s.sol`, `script/03_Swap.s.sol`, `script/base/BaseScript.sol`, `script/base/LiquidityHelpers.sol`, `script/testing/00_DeployV4.s.sol`, `test/utils/BaseTest.sol`, `test/utils/Deployers.sol`, `test/utils/libraries/EasyPosm.sol` (+ test), and `LICENSE` |
+| Uniswap v4-core, v4-periphery (and their permit2, solmate, OpenZeppelin contracts) | via OpenZeppelin uniswap-hooks | PoolManager, types, libraries (`FullMath`, `TickMath`, `LiquidityAmounts`, `StateLibrary`, ...) |
+| OpenZeppelin uniswap-hooks v1.1.0 | `lib/uniswap-hooks` @ `e59fe72` | `BaseHook` |
+| hookmate | `lib/hookmate` @ `33408fb` | v4 deployment artifacts and router for tests, `HookMiner` for hook addresses |
+| reactive-lib-omni | `lib/reactive-lib-omni` @ `3ade0dc` | Base contracts of the Reactive RCs and receivers (`src/reactive/`) |
+| reactive-lib (legacy) | `lib/reactive-lib` @ `f6990ce` | Only in the regression test `test/reactive/utils/LegacyReactive.sol` that replays the incident |
+| reactive-test-lib | `lib/reactive-test-lib` @ `2ff9b2a` | No longer imported (replaced by `ReactiveNetworkSim`); kept pinned for history |
+| forge-std | `lib/forge-std` @ `8bbcf6e` | Test and script framework |
+| Chainlink `AggregatorV3Interface` | smartcontractkit/chainlink (MIT), interface only | Vendored as [`src/interfaces/AggregatorV3Interface.sol`](src/interfaces/AggregatorV3Interface.sol) |
+
+Original to Tenure: everything else in `src/` (`TenureHook`, `CuratedVault`, `ChainlinkReferencePrice`, the
+scoring, budget and position-value libraries, the Reactive contracts), the deploy, check and demo scripts
+(`script/Deploy*.s.sol`, `script/CheckReactive.s.sol`, `script/base/TenureHookDeployer.sol`,
+`script/base/ReactiveWiring.sol`, `script/demo/`, `script/demo*.sh`), the tests except the template files above
+(including `ReactiveNetworkSim`), the Python reference model in `sim/`, and the docs.
 
 ## How it was built
 
