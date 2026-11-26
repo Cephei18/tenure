@@ -212,6 +212,23 @@ Lasna block numbers, and funding the RC balance instead of its reserves. A live 
 were fixed on `reactive-lib-omni` and are now tested by a conformance simulator that bills like the real network
 (`test/reactive/utils/ReactiveNetworkSim.sol`).
 
+## Frontend: Tenure Lab
+
+**[cephei18.github.io/tenure](https://cephei18.github.io/tenure/)** is a read-only page with no wallet
+([`frontend/`](frontend/README.md)). It has four sections:
+
+- **Live:** pool A's tier and budget, and vault B's `relayFrozen()`, read from Unichain Sepolia. Below them, the
+  proven live sequence (restore, re-freeze, Lasna reaction, relay, exit while FROZEN), with explorer links.
+- **Replay:** the headline scenario animated (runs A, B and C), plus the 20-seed sweep.
+- **Playground:** the poisoned curator's real per-decision losses from the Solidity scenario, re-scored with your
+  risk-budget parameters.
+- **Math:** drag a range and move the prices to see holdings, NAV at the fair price, immediate leakage and markout
+  alpha.
+
+The page's TypeScript math is an exact BigInt port. It matches all 1,980 differential-test vectors in
+`test/vectors/`. Replaying the recorded scoring events reproduces the hook's emitted budget and tier after every
+event.
+
 ## Threat model summary ([`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md))
 
 - **Park-then-follow attack** (the slow bleed static caps miss): caught by the markout. FROZEN after 3 rounds.

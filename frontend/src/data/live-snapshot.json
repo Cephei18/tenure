@@ -1,0 +1,16 @@
+{
+  "_doc": "Last recorded live values, read with `cast call --block 68850085` on Unichain Sepolia (chain 1301). Shown only when the RPC cannot be reached. Refresh with the same calls before a release.",
+  "chainId": 1301,
+  "blockNumber": "68850085",
+  "timestamp": 1795702513,
+  "poolA": {
+    "tier": 2,
+    "budget": "3403819153372281",
+    "bMax": "20000000000000000",
+    "recordCount": "8",
+    "settlePointer": "8"
+  },
+  "vaultA": { "totalSupply": "1000000" },
+  "vaultB": { "relayFrozen": true },
+  "director": { "ticks": "210", "rounds": "3", "frozenAt": "26", "poisonAt": "20" }
+}

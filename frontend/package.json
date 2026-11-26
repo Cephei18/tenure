@@ -1,0 +1,31 @@
+{
+  "name": "tenure-lab",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tenure Lab: judge-facing, read-only frontend for the Tenure Uniswap v4 hook",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "abi": "node scripts/extract-abi.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.15.4",
+    "viem": "2.57.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/node": "20.19.43",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "4.7.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "6.4.6",
+    "vitest": "3.2.7"
+  }
+}
