@@ -191,3 +191,8 @@ Testnet (Unichain Sepolia + Reactive Lasna): [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 Further reading: [`docs/MATH.md`](docs/MATH.md) (scoring math), [`docs/RESULTS.md`](docs/RESULTS.md),
 [`docs/GAS.md`](docs/GAS.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+
+## How it was built
+
+Developed with AI-assisted tooling (Claude Code) under the author's direction; design decisions, testnet
+deployment and verification by the author. Build logs: [`docs/dev-log/`](docs/dev-log/).

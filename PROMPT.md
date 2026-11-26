@@ -8,9 +8,10 @@ The remaining work is the vault (M3), the headline demo (M4), hardening (M5) and
 ## Every iteration, do exactly this
 
 1. Orient. Read CLAUDE.md fully (including ## Learnings — those decisions are final). Read PLAN.md. Read the last
-   ~80 lines of PROGRESS.md and all of BLOCKERS.md. Run `git status` and `git log --oneline -10`.
+   ~80 lines of docs/dev-log/PROGRESS.md and all of docs/dev-log/BLOCKERS.md. Run `git status` and
+   `git log --oneline -10`.
    If the tree is dirty from a crashed iteration: keep it if it builds and is coherent, otherwise `git stash push -m
-   "<reason>"` and note it in PROGRESS.md.
+   "<reason>"` and note it in docs/dev-log/PROGRESS.md.
 
 2. Pick one task: the FIRST `[ ]` task in PLAN.md. Skip `[x]`, `[!]`, `[H]`.
    If none remain, create a DONE file with a short summary, commit, and stop.
@@ -24,7 +25,7 @@ The remaining work is the vault (M3), the headline demo (M4), hardening (M5) and
 5. Verify with BOTH profiles: `forge build`, `forge test`, and `FOUNDRY_PROFILE=deploy forge build`.
    For sim changes: `python -m pytest sim -q`. Run the self-review checklist. Everything must pass.
 
-6. If green: mark `[x]` in PLAN.md, append to PROGRESS.md:
+6. If green: mark `[x]` in PLAN.md, append to docs/dev-log/PROGRESS.md:
    ## <ISO timestamp> — <task id> <name> — DONE
    What: <2-4 lines>
    Files: <list>
@@ -34,7 +35,7 @@ The remaining work is the vault (M3), the headline demo (M4), hardening (M5) and
    Add non-obvious learnings to CLAUDE.md ## Learnings. Commit: `<task id>: <description>`.
 
 7. If stuck after 3 genuinely different approaches: restore to the last green state, mark `[!]`, write to
-   BLOCKERS.md (task id, approaches, trimmed error, hypothesis), commit, and stop this iteration.
+   docs/dev-log/BLOCKERS.md (task id, approaches, trimmed error, hypothesis), commit, and stop this iteration.
 
 8. Stop after ONE task. Final line of output: `STATUS: <task id> <DONE|BLOCKED> — <one sentence>`
 
@@ -47,7 +48,7 @@ The remaining work is the vault (M3), the headline demo (M4), hardening (M5) and
 
 ## Hard rules
 - NEVER stop to ask the human a question. If a decision is needed, choose the most reasonable option consistent
-  with CLAUDE.md, implement it, and record it under "Decisions made" in PROGRESS.md.
+  with CLAUDE.md, implement it, and record it under "Decisions made" in docs/dev-log/PROGRESS.md.
 - NEVER push to a remote, change remotes, or touch git or GitHub credentials. Commit locally only.
 - Never weaken, skip, or delete a test, or loosen an acceptance criterion, to get green.
 - Never use mainnet, real private keys, or real funds. Anvil and local tests only.

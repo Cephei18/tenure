@@ -9,7 +9,7 @@ MAX_TURNS="${MAX_TURNS:-120}"       # cap on agent turns within one iteration
 COOLDOWN_FAIL="${COOLDOWN_FAIL:-600}" # seconds to wait after a failed/limited run (usage limits, network)
 LOG_DIR=".loop-logs"
 mkdir -p "$LOG_DIR"
-touch PROGRESS.md BLOCKERS.md
+mkdir -p docs/dev-log && touch docs/dev-log/PROGRESS.md docs/dev-log/BLOCKERS.md
 
 command -v claude >/dev/null || { echo "claude CLI not found"; exit 1; }
 command -v forge  >/dev/null || { echo "forge not found (install Foundry)"; exit 1; }
@@ -48,4 +48,4 @@ for i in $(seq 1 "$MAX_ITERS"); do
   fi
 done
 
-echo "Loop finished. Morning checklist: git log --oneline -30 | PROGRESS.md | BLOCKERS.md | forge test"
+echo "Loop finished. Morning checklist: git log --oneline -30 | docs/dev-log/PROGRESS.md | docs/dev-log/BLOCKERS.md | forge test"

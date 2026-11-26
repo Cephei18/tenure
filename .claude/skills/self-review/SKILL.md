@@ -1,6 +1,6 @@
 ---
 name: self-review
-description: Mandatory verification checklist to run before marking any PLAN.md task as done or committing finished work in the Tenure repo. Use this skill every time you are about to write "[x]", append a DONE entry to PROGRESS.md, or commit — and whenever you suspect a test passes for the wrong reason.
+description: Mandatory verification checklist to run before marking any PLAN.md task as done or committing finished work in the Tenure repo. Use this skill every time you are about to write "[x]", append a DONE entry to docs/dev-log/PROGRESS.md, or commit — and whenever you suspect a test passes for the wrong reason.
 ---
 
 # Self-review before "done"
@@ -9,7 +9,7 @@ Work through every item. If any fails, the task is not done.
 
 ## Build and tests
 - [ ] `forge build` has zero errors and no new warnings you introduced.
-- [ ] `forge test` FULL suite passes (not just the new tests). Paste the summary line into PROGRESS.md.
+- [ ] `forge test` FULL suite passes (not just the new tests). Paste the summary line into docs/dev-log/PROGRESS.md.
 - [ ] If sim/ changed: `python -m pytest sim -q` passes; vectors regenerated and committed if the model changed.
 - [ ] `forge fmt --check` passes (run `forge fmt` if not).
 
@@ -38,6 +38,6 @@ Work through every item. If any fails, the task is not done.
 - [ ] Authorization uses `sender`/registered vault, never hookData alone.
 
 ## Bookkeeping
-- [ ] PROGRESS.md entry written in the required format, with "Notes for human".
+- [ ] docs/dev-log/PROGRESS.md entry written in the required format, with "Notes for human".
 - [ ] Learnings added to CLAUDE.md if anything was surprising.
 - [ ] Task marked `[x]` in PLAN.md. Committed with message `<task id>: <description>`.

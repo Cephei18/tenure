@@ -1,6 +1,6 @@
 # PLAN — Tenure
 
-Legend: `[ ]` todo · `[x]` done · `[!]` blocked (see BLOCKERS.md) · `[H]` human-only, skip it
+Legend: `[ ]` todo · `[x]` done · `[!]` blocked (see docs/dev-log/BLOCKERS.md) · `[H]` human-only, skip it
 The loop takes the FIRST `[ ]` task, top to bottom. Each task must meet its acceptance criteria before `[x]`.
 Order is deliberate: the most impressive, most novel part (the measurement engine) is built and proven first,
 as pure libraries with heavy tests, before any vault plumbing.
@@ -10,7 +10,7 @@ as pure libraries with heavy tests, before any vault plumbing.
 ## M0 — Foundation (small, do fast)
 - [x] **M0.1 Verify scaffold.** Confirm the repo builds from the v4-template (`forge build`, `forge test`). Remove the
   template's example hook/tests only after the build is green. Create `src/libraries`, `src/interfaces`, `src/mocks`,
-  `sim/`, `docs/`. Create `PROGRESS.md` and `BLOCKERS.md` if missing.
+  `sim/`, `docs/`. Create `docs/dev-log/PROGRESS.md` and `docs/dev-log/BLOCKERS.md` if missing.
   _Accept:_ clean build, template tests either passing or intentionally removed, folders exist, committed.
 - [x] **M0.2 Reference price.** `IReferencePrice` (returns fair `sqrtPriceX96` for a PoolKey/PoolId, plus `updatedAt`)
   and `MockReferencePrice` (settable per pool). Staleness check helper.
