@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tenure · UHI11</title>
+<!-- Tenure UHI11 demo-video deck. 10 slides at 1920x1080. Keys: arrows / space / PageUp-Down, Home, End,
+     N = speaker notes, F = fullscreen. #3 in the URL opens slide 3. Print (Ctrl+P) gives one slide per page.
+     Numbers: see docs/slides/README.md ("Where every number comes from"). Colours: docs/design-tokens.json. -->
+<style>
+@font-face { font-family: "Inter"; src: url("fonts/Inter-400.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-600.ttf") format("truetype"); font-weight: 500 600; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-800.ttf") format("truetype"); font-weight: 700 900; }
+:root {
+  --bg: #14070c; --surface: #1f0a12; --surface2: #2a0f19; --border: #3d1724;
+  --primary: #e11d48; --accent: #f472b6; --soft: #fbcfe8; --text: #ffffff; --muted: #c99aae;
+  --full: #4ade80; --restricted: #fbbf24; --frozen: #e11d48; --static: #fbbf24; --tenure: #f472b6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #000; height: 100%; overflow: hidden; }
+body { font-family: Inter, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; color: var(--text);
+  -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+#stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: 50% 50%; }
+.slide { position: absolute; inset: 0; width: 1920px; height: 1080px; padding: 84px 96px 0; background: var(--bg);
+  display: none; overflow: hidden; }
+.slide.active { display: block; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+h2 { font-size: 60px; font-weight: 800; line-height: 1.1; letter-spacing: -.01em; margin-top: 12px; }
+.foot { position: absolute; left: 96px; right: 96px; bottom: 34px; display: flex; justify-content: space-between;
+  font-size: 20px; color: var(--muted); }
+.soft { color: var(--soft); } .muted { color: var(--muted); } .acc { color: var(--accent); } .rose { color: var(--primary); }
+.card { background: var(--surface); border: 2px solid var(--border); border-radius: 16px; }
+img { display: block; }
+.pill { display: inline-flex; align-items: center; height: 56px; padding: 0 28px; border-radius: 999px;
+  font-weight: 800; font-size: 26px; letter-spacing: .06em; }
+.notes { display: none; }
+body.show-notes .slide.active .notes { display: block; position: absolute; left: 0; right: 0; bottom: 0;
+  background: rgba(20,7,12,.96); border-top: 2px solid var(--accent); padding: 24px 96px 72px; font-size: 26px;
+  line-height: 1.45; color: var(--soft); z-index: 10; }
+.notes li { margin-left: 28px; }
+
+/* 1 title */
+.s1 .inner { position: absolute; inset: 0; padding: 0 96px; display: flex; align-items: center; }
+.s1 .glow { position: absolute; right: -240px; top: -200px; width: 1100px; height: 1100px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(225,29,72,.28), rgba(225,29,72,0) 62%); }
+.s1 h1 { font-size: 220px; font-weight: 800; letter-spacing: -.04em; line-height: .95; }
+.s1 .sub { font-size: 60px; font-weight: 600; color: var(--soft); margin-top: 28px; line-height: 1.15; }
+.s1 .line { font-size: 32px; color: var(--muted); margin-top: 44px; }
+.s1 .name { font-size: 34px; font-weight: 600; margin-top: 18px; }
+.tierstack { position: absolute; right: 150px; top: 330px; display: flex; flex-direction: column; gap: 26px; }
+.tierstack .pill { height: 92px; font-size: 38px; padding: 0 48px; justify-content: center; width: 430px; }
+.tierstack .arr { font-size: 30px; color: var(--muted); text-align: center; line-height: 1; margin: -10px 0; }
+
+/* 2 problem */
+.s2 .cols { display: grid; grid-template-columns: 960px 1fr; gap: 64px; margin-top: 56px; }
+.s2 .pt { margin-bottom: 44px; }
+.s2 .pt b { display: block; font-size: 40px; font-weight: 800; line-height: 1.18; }
+.s2 .pt span { display: block; font-size: 23px; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+.s2 .tools { padding: 34px 36px; }
+.s2 .tools h3 { font-size: 24px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 18px; }
+.s2 .row { padding: 18px 0; border-top: 2px solid var(--border); }
+.s2 .row b { display: block; font-size: 27px; font-weight: 700; }
+.s2 .row span { display: block; font-size: 24px; color: var(--soft); margin-top: 6px; }
+
+/* 3 insight */
+.s3 .inner { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.s3 .big { font-size: 104px; font-weight: 800; line-height: 1.08; letter-spacing: -.02em; }
+.s3 .small { font-size: 36px; color: var(--soft); margin-top: 48px; }
+.s3 .flow { display: flex; align-items: center; gap: 22px; margin-top: 72px; font-size: 28px; font-weight: 600; }
+.s3 .chip { border: 2px solid var(--border); background: var(--surface); border-radius: 999px; padding: 14px 30px; }
+.s3 .to { color: var(--accent); font-size: 36px; }
+.s3 .out { border: 2px solid var(--primary); background: var(--surface2); border-radius: 999px; padding: 14px 32px; }
+
+/* 4 layers */
+.s4 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-top: 48px; }
+.s4 .card { padding: 30px 30px 26px; height: 262px; }
+.num { width: 48px; height: 48px; border-radius: 50%; background: var(--primary); display: flex; align-items: center;
+  justify-content: center; font-weight: 800; font-size: 24px; }
+.s4 .card b { display: block; font-size: 32px; font-weight: 800; margin: 18px 0 10px; }
+.s4 .card span { font-size: 24px; color: var(--soft); line-height: 1.38; }
+.s4 .tiers { margin-top: 34px; width: 1728px; }
+.s4 .exit { font-size: 30px; font-weight: 600; margin-top: 18px; }
+.s4 .exit i { font-style: normal; color: var(--full); }
+
+/* 5 how */
+.s5 .life { width: 1728px; margin-top: 40px; }
+.s5 .formula { margin-top: 30px; padding: 26px 36px; font-size: 36px; font-weight: 600; display: flex; gap: 28px; align-items: baseline; }
+.s5 .formula .k { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+.s5 .why { margin-top: 30px; display: flex; gap: 28px; align-items: stretch; }
+.s5 .why .lbl { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 600;
+  width: 230px; display: flex; align-items: center; line-height: 1.3; }
+.s5 .why .it { flex: 1; padding: 22px 26px; font-size: 26px; font-weight: 600; display: flex; gap: 16px; align-items: center; }
+.tick { color: var(--full); font-weight: 800; font-size: 30px; }
+
+/* 6 / 7 problem -> solution */
+.ps { display: grid; grid-template-columns: 1fr 64px 1fr; align-items: stretch; }
+.ps .p, .ps .s { padding: 22px 28px; }
+.ps .p { background: var(--surface); border: 2px solid var(--border); border-radius: 16px; }
+.ps .s { background: var(--surface2); border: 2px solid var(--accent); border-radius: 16px; }
+.ps .lab { font-size: 19px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ps .s .lab { color: var(--accent); }
+.ps .t { font-size: 29px; font-weight: 600; line-height: 1.28; margin-top: 8px; }
+.ps .t small { display: block; font-size: 21px; font-weight: 400; color: var(--muted); margin-top: 6px; }
+.ps .ar { display: flex; align-items: center; justify-content: center; font-size: 40px; color: var(--accent); }
+.s6 .ps { margin-top: 22px; }
+.s6 .ps:first-of-type { margin-top: 40px; }
+.s6 .proof { margin-top: 30px; display: flex; align-items: baseline; gap: 20px; }
+.s6 .proof b { font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.s6 .proof span { font-size: 22px; color: var(--muted); }
+.s6 .relay { width: 1600px; margin: 6px 0 0 64px; }
+.s7 .wrap { display: grid; grid-template-columns: 860px 1fr; gap: 48px; margin-top: 30px; }
+.s7 .blk + .blk { margin-top: 26px; }
+.s7 .who { font-size: 30px; font-weight: 800; margin-bottom: 12px; }
+.s7 .ps { grid-template-columns: 1fr; gap: 12px; }
+.s7 .ps .ar { display: none; }
+.s7 .nums { display: flex; gap: 14px; margin-top: 10px; }
+.s7 .sol { font-size: 19px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-top: 18px; }
+.s7 .n { flex: 1; padding: 14px 18px; }
+.s7 .n b { display: block; font-size: 36px; font-weight: 800; }
+.s7 .n span { font-size: 19px; color: var(--muted); }
+.s7 .arch { width: 812px; margin-top: 6px; }
+
+/* 8 demo */
+.s8 .grid { display: grid; grid-template-columns: 820px 812px; gap: 96px; margin-top: 28px; }
+.shot { border: 2px solid var(--border); border-radius: 12px; overflow: hidden; }
+.s8 .cap { font-size: 19px; color: var(--muted); margin: 6px 0 0; }
+.s8 .beats { margin-top: 26px; }
+.s8 .beat { display: flex; gap: 18px; align-items: center; font-size: 29px; font-weight: 600; padding: 12px 0; }
+.s8 .beat .d { width: 18px; height: 18px; border-radius: 50%; flex: none; }
+.s8 .link { margin-top: 18px; font-size: 28px; font-weight: 700; color: var(--accent); }
+
+/* 9 results */
+.s9 .bigs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; margin-top: 34px; }
+.s9 .bigs .card { padding: 20px 30px; display: flex; align-items: baseline; gap: 20px; }
+.s9 .bigs b { font-size: 68px; font-weight: 800; line-height: 1.05; white-space: nowrap; }
+.s9 .bigs span { font-size: 25px; color: var(--soft); line-height: 1.25; }
+.s9 .charts { display: grid; grid-template-columns: 840px 840px; gap: 48px; margin-top: 40px; }
+.s9 .rigor { margin-top: 30px; font-size: 25px; color: var(--soft); }
+.s9 .rigor b { color: var(--text); }
+
+/* 10 close */
+.s10 .cols { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 28px; margin-top: 80px; }
+.s10 .card { min-height: 330px; }
+.s10 .card { padding: 36px 36px 40px; }
+.s10 .card .w { font-size: 24px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.s10 .card b { display: block; font-size: 50px; font-weight: 800; line-height: 1.15; margin-top: 18px; }
+.s10 .card.t { border-color: var(--primary); background: var(--surface2); }
+.s10 .card.t .w { color: var(--accent); }
+.s10 .links { margin-top: 96px; display: flex; gap: 64px; font-size: 36px; font-weight: 700; }
+.s10 .links span { color: var(--muted); font-weight: 400; font-size: 24px; display: block; margin-bottom: 6px; letter-spacing: .14em; text-transform: uppercase; }
+.s10 .thanks { margin-top: 64px; font-size: 30px; color: var(--soft); }
+
+@page { size: 1920px 1080px; margin: 0; }
+@media print {
+  html, body { overflow: visible; height: auto; background: var(--bg); }
+  #stage { position: static; transform: none !important; width: 1920px; height: auto; }
+  .slide { position: relative; display: block !important; break-after: page; page-break-after: always; }
+  .slide:last-child { break-after: auto; page-break-after: auto; }
+  .notes { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- 1 -->
+<section class="slide s1">
+  <div class="glow"></div>
+  <div class="inner"><div>
+    <div class="kicker">A Uniswap v4 hook · UHI11 · Curated Liquidity</div>
+    <h1 style="margin-top:30px">Tenure</h1>
+    <div class="sub">Earned autonomy for<br>AI liquidity curators</div>
+    <div class="name" style="margin-top:56px">Gopika Chauhan</div>
+  </div></div>
+  <div class="tierstack" aria-label="autonomy tiers">
+    <div class="pill" style="background:var(--full);color:var(--bg)">FULL</div>
+    <div class="arr">&#8595;</div>
+    <div class="pill" style="background:var(--restricted);color:var(--bg)">RESTRICTED</div>
+    <div class="arr">&#8595;</div>
+    <div class="pill" style="background:var(--frozen);color:var(--text)">FROZEN</div>
+  </div>
+  <aside class="notes"><ul><li>Hi, I'm Gopika, and this is Tenure.</li></ul></aside>
+</section>
+
+<!-- 2 -->
+<section class="slide s2">
+  <div class="kicker">The problem</div>
+  <h2>Curators are trusted with everything</h2>
+  <div class="cols">
+    <div>
+      <div class="pt"><b>Curators are fully trusted.</b>
+        <span>Stream Finance, Nov 2025: curator vault deposits fell from ~$10B to ~$6.9B.</span></div>
+      <div class="pt"><b>AI curators can be poisoned undetectably.</b>
+        <span>Princeton, &ldquo;AI Agents in Cryptoland&rdquo;: memory injection works; detectors help little once stored context is corrupted.</span></div>
+      <div class="pt"><b>A poisoned curator doesn't steal. <span class="rose" style="display:inline;font-size:inherit;margin:0;color:var(--accent)">It bleeds the vault</span> with small, valid-looking decisions.</b></div>
+    </div>
+    <div class="card tools">
+      <h3>Today's tools</h3>
+      <div class="row"><b>Static caps <span class="muted" style="display:inline;font-weight:400;font-size:22px">(Arrakis-style)</span></b><span>Stop one big loss, miss many small ones.</span></div>
+      <div class="row"><b>Guardians &amp; timelocks <span class="muted" style="display:inline;font-weight:400;font-size:22px">(Morpho, Yearn)</span></b><span>Need a human awake.</span></div>
+      <div class="row"><b>Curator scorecards</b><span>Read after the damage.</span></div>
+      <div class="row"><b>Agent spending limits <span class="muted" style="display:inline;font-weight:400;font-size:22px">(Kusari)</span></b><span>Limit <i>what</i> an agent does, not <i>how well</i>.</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>2</span></div>
+  <aside class="notes"><ul>
+    <li>Depositors hand the curator everything. Stream showed what mandate drift costs: billions left within days.</li>
+    <li>AI curators add a new hole: poison the memory, and you can't tell by inspecting the agent.</li>
+    <li>The attack is a bleed: park liquidity at a bad price, trade against it. No theft transaction.</li>
+    <li>Static caps: every bleed step is under the cap. Guardians: nobody is awake for 25 small moves.</li>
+    <li>Scorecards: after the money is gone. Spending limits: they bound actions, not decision quality.</li>
+  </ul></aside>
+</section>
+
+<!-- 3 -->
+<section class="slide s3">
+  <div class="inner">
+  <div class="kicker">The insight</div>
+  <div class="big" style="margin-top:28px">Don't detect the compromise.<br><span class="acc">Measure the damage.</span></div>
+  <div class="small">Human, bot or poisoned AI: a harmful decision is harmful whoever made it.</div>
+  <div class="flow">
+    <span class="chip">Human</span><span class="chip">Bot</span><span class="chip">Poisoned AI</span>
+    <span class="to">&#8594;</span><span class="out">same decision, same grade</span>
+  </div>
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>3</span></div>
+  <aside class="notes"><ul>
+    <li>Everyone else asks: is this agent compromised? That question has no reliable answer.</li>
+    <li>Tenure asks a question we can answer on-chain: did this decision lose depositors money?</li>
+    <li>When the damage adds up, Tenure takes freedom away automatically. Good decisions earn it back.</li>
+  </ul></aside>
+</section>
+
+<!-- 4 -->
+<section class="slide s4">
+  <div class="kicker">How Tenure works</div>
+  <h2>Four layers</h2>
+  <div class="cards">
+    <div class="card"><div class="num">1</div><b>Mandate</b><span>Depositor rules enforced by the hook. Changes are timelocked.</span></div>
+    <div class="card"><div class="num">2</div><b>Decision scoring</b><span>Every rebalance graded twice at a fair oracle price.</span></div>
+    <div class="card"><div class="num">3</div><b>Budget &#8594; autonomy</b><span>Losses drain, time refills. FULL &#8594; RESTRICTED &#8594; FROZEN.</span></div>
+    <div class="card"><div class="num">4</div><b>Reputation</b><span>Proven good decisions earn a bigger budget and deposit cap.</span></div>
+  </div>
+  <img class="tiers" src="assets/C_tiers.png" alt="Tier bar: FROZEN below 20%, RESTRICTED 20-50%, FULL from 50%. Losses drain, time refills; FROZEN is sticky; guardian restore sets 35%.">
+  <div class="exit"><i>&#10003;</i> Depositors can always withdraw, in every tier.</div>
+  <div class="foot"><span>Tenure · UHI11</span><span>4</span></div>
+  <aside class="notes"><ul>
+    <li>Mandate: the bounds depositors agreed to. Changing them is timelocked, so they can leave first.</li>
+    <li>Scoring: the core. Every rebalance is graded at the moment it happens and again 50 blocks later.</li>
+    <li>Budget: a leaky bucket, 2% of NAV in the scenario. Below 50% RESTRICTED, below 20% FROZEN.</li>
+    <li>FROZEN is sticky. Only a timelocked guardian restore brings it back, and only to 35%.</li>
+    <li>Reputation is measured by the hook itself. And withdrawals never check the tier.</li>
+  </ul></aside>
+</section>
+
+<!-- 5 -->
+<section class="slide s5">
+  <div class="kicker">How it works</div>
+  <h2>Every rebalance is graded twice</h2>
+  <img class="life" src="assets/B_lifecycle.png" alt="Lifecycle: beginRebalance snapshot at fair price; unlock remove and add liquidity, hook blocks moves outside a session; endRebalance mandate check, leakage, charge budget; 50 blocks later markout vs did nothing; budget and reputation.">
+  <div class="card formula"><span class="k">Markout</span><span>alpha = NAV(new position) &minus; NAV(did nothing), <span class="soft">at the fair price, 50 blocks later</span></span></div>
+  <div class="why">
+    <div class="lbl">Why it must<br>be a hook</div>
+    <div class="card it"><span class="tick">&#10003;</span>Blocks unmeasured liquidity moves</div>
+    <div class="card it"><span class="tick">&#10003;</span>Reads the pool independently</div>
+    <div class="card it"><span class="tick">&#10003;</span>Settles grades on ordinary swaps</div>
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>5</span></div>
+  <aside class="notes"><ul>
+    <li>The vault opens a session: the hook snapshots holdings at the Chainlink fair price.</li>
+    <li>Liquidity moves happen inside unlock. Outside a session, the hook reverts any move on the vault's position.</li>
+    <li>endRebalance checks the mandate and charges immediate leakage to the budget.</li>
+    <li>50 blocks later: compare the new position with doing nothing. Negative alpha is charged too.</li>
+    <li>Only a hook can do this: it gates modifyLiquidity, reads the PoolManager itself, and settles in afterSwap.</li>
+  </ul></aside>
+</section>
+
+<!-- 6 -->
+<section class="slide s6">
+  <div class="kicker">Reactive Network</div>
+  <h2>Two problems a single chain can't solve</h2>
+  <div class="ps">
+    <div class="p"><div class="lab">Problem 1</div><div class="t">Grades are due 50 blocks later. Settling inside a swap cost that trader ~146k extra gas.</div></div>
+    <div class="ar">&#8594;</div>
+    <div class="s"><div class="lab">Solution</div><div class="t">Keeper-free settlement from Lasna.<small>Deployed and reacting live; the callback path is proven in tests.</small></div></div>
+  </div>
+  <div class="ps">
+    <div class="p"><div class="lab">Problem 2</div><div class="t">A curator caught in one vault stayed free in its others.</div></div>
+    <div class="ar">&#8594;</div>
+    <div class="s"><div class="lab">Solution</div><div class="t">FROZEN is relayed across vaults and chains.<small>Freeze-only: a compromised relay can't hurt depositors.</small></div></div>
+  </div>
+  <div class="proof"><b>Proof, live on testnet</b><span>vault A froze &#8594; Lasna reacted &#8594; vault B froze</span></div>
+  <img class="relay" src="assets/E_relay_timeline.png" alt="Relay timeline: Unichain freeze block 68,837,823, Lasna reaction block 9,291,302, Unichain FreezeRelayed block 68,837,825: 2 blocks, about 2 seconds.">
+  <div class="foot"><span>Tenure · UHI11</span><span>6</span></div>
+  <aside class="notes"><ul>
+    <li>Markouts come due 50 blocks later. Settling one inside a swap costs that swapper about 146k gas.</li>
+    <li>So SettlerRC on Lasna watches the hook and calls the permissionless settleMany. Honest status: it reacts live; the callback itself is proven in tests.</li>
+    <li>Second: a poisoned curator often runs several vaults. FreezeRC relays FROZEN to its other vaults.</li>
+    <li>It can only freeze. It can never unfreeze or move funds, so a compromised relay can't hurt depositors.</li>
+    <li>Live: vault A froze at block 68,837,823, vault B two blocks later.</li>
+  </ul></aside>
+</section>
+
+<!-- 7 -->
+<section class="slide s7">
+  <div class="kicker">Chainlink + Unichain</div>
+  <h2>A fair price, and a cheap place to grade</h2>
+  <div class="wrap">
+    <div>
+      <div class="blk">
+        <div class="who">Chainlink</div>
+        <div class="ps">
+          <div class="p"><div class="lab">Problem</div><div class="t">The pool's own price can be pushed within one block.</div></div>
+          <div class="ar"></div>
+          <div class="s"><div class="lab">Solution</div><div class="t">Every measurement uses a manipulation-resistant fair price.</div></div>
+        </div>
+      </div>
+      <div class="blk">
+        <div class="who">Unichain</div>
+        <div class="ps">
+          <div class="p"><div class="lab">Problem</div><div class="t">Grading adds ~538k gas per rebalance: ~$16 on mainnet.</div></div>
+        </div>
+        <div class="sol">Solution &middot; grade on a 1-second L2</div>
+        <div class="nums">
+          <div class="card n"><b class="acc">~1.6&cent;</b><span>per rebalance</span></div>
+          <div class="card n"><b>&lt; 1 min</b><span>for the 50-block window</span></div>
+          <div class="card n"><b>~17%</b><span>more gas per swap</span></div>
+        </div>
+      </div>
+    </div>
+    <img class="arch" src="assets/A_architecture.png" alt="Architecture: curator agent, off-chain and untrusted, calls CuratedVault; PoolManager and TenureHook gate every liquidity move; TenureScorer library; Chainlink fair price into the hook; Reactive Lasna SettlerRC and FreezeRC; freeze relayed to vault B.">
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>7</span></div>
+  <aside class="notes"><ul>
+    <li>If grading used the pool's spot price, the attacker could push it for one block and fake a good grade.</li>
+    <li>So every score uses ChainlinkReferencePrice. Stale or bad answers revert. Live on pool B with ETH/USD and USDC/USD.</li>
+    <li>Grading costs 537,900 gas per rebalance. That's about $16 on mainnet at 10 gwei.</li>
+    <li>On Unichain it's about 1.6 cents, and 50 one-second blocks is under a minute. Swaps pay +17,205 gas, about 17%.</li>
+  </ul></aside>
+</section>
+
+<!-- 8 -->
+<section class="slide s8">
+  <div class="kicker">Live demo · Unichain Sepolia + Reactive Lasna</div>
+  <h2>The attack, live on testnet</h2>
+  <div class="grid">
+    <div>
+      <div class="shot"><img src="assets/H_lab_live.png" width="816" alt="Tenure Lab, Live proof section: vault A curator FROZEN, budget 17.0%, 1,000,000 shares left; the proven live sequence with block numbers."></div>
+      <img src="assets/D_live_budget.png" width="720" style="margin-top:20px" alt="Vault A risk budget per demo tick on Unichain Sepolia: 100% until tick 20, then 94.4, 94.9, 73.5, 47.3 (RESTRICTED, tick 23), 32.3, 15.1 (FROZEN, tick 25), 7.7.">
+      <div class="cap">Vault A risk budget, % of bucket, from the director's on-chain Tick events (ticks 1&ndash;90).</div>
+    </div>
+    <div>
+      <div class="shot"><img src="assets/H_lab_simulator.png" width="808" alt="Tenure Lab, Simulator section: replay of the real attack; static caps stay FULL with 25 attack rounds, Tenure FROZEN after 3."></div>
+      <div class="beats">
+        <div class="beat"><span class="d" style="background:var(--frozen)"></span>Poisoned at tick 20 &#8594; FROZEN at tick 25</div>
+        <div class="beat"><span class="d" style="background:var(--accent)"></span>Relayed to vault B in 2 blocks</div>
+        <div class="beat"><span class="d" style="background:var(--full)"></span>Depositor withdrew everything while FROZEN</div>
+      </div>
+      <div class="link">cephei18.github.io/tenure</div>
+    </div>
+  </div>
+  <div class="foot"><span>Tenure · UHI11</span><span>8</span></div>
+  <aside class="notes"><ul>
+    <li>This is where I switch to the screen recording of the Tenure Lab.</li>
+    <li>Poisoned at tick 20. RESTRICTED at 23, FROZEN at 25: three blocks after the first drop. Safe mode at 26.</li>
+    <li>Later the guardian restored it to RESTRICTED, the attack re-froze it, and Reactive relayed that freeze to vault B in 2 blocks.</li>
+    <li>Then the depositor redeemed every share of the frozen vault in one transaction. Exit is never blocked.</li>
+  </ul></aside>
+</section>
+
+<!-- 9 -->
+<section class="slide s9">
+  <div class="kicker">Results</div>
+  <h2>Same attack, with and without Tenure</h2>
+  <div class="bigs">
+    <div class="card"><b class="rose">20/20</b><span>attack runs<br>frozen</span></div>
+    <div class="card"><b style="color:var(--full)">never</b><span>honest curator<br>restricted</span></div>
+    <div class="card"><b class="acc">&minus;59%</b><span>attacker profit<br>(median)</span></div>
+  </div>
+  <div class="charts">
+    <img src="assets/F_results.png" width="840" alt="Slow bleed value lost: static caps 9.52% of NAV, Tenure 1.74%. Attacker profit, median of 20 seeds: static caps 1,587 tokens, Tenure 650.">
+    <img src="assets/G_playground.png" width="840" alt="Losses let through over 52 decisions: no check 8,376 tokens; 0.2% static cap 8,376 (blocks 0 of 52); Tenure 2,471 (FROZEN after 9 of 52).">
+  </div>
+  <div class="rigor"><b>258</b> Foundry + <b>53</b> Python + <b>25</b> frontend tests &middot; Python and Solidity agree to the wei on <b>1,992</b> vectors &middot; <b>7</b> invariants, <b>128,000</b> random calls</div>
+  <div class="foot"><span>Tenure · UHI11</span><span>9</span></div>
+  <aside class="notes"><ul>
+    <li>20 seeded runs of the same attack: Tenure froze the poisoned curator in all 20, 60 to 76 blocks after poisoning.</li>
+    <li>The honest curator was never restricted: FULL in every block of every seed.</li>
+    <li>Median attacker profit fell from 1,587 to 650 tokens, 59% less. Slow bleed: 9.52% of NAV lost vs 1.74%.</li>
+    <li>Right: the poisoned curator's 52 real decisions, re-scored. A 0.2% static cap blocks none of them. Tenure freezes after 9.</li>
+    <li>Rigor: every number comes from Foundry tests against a real v4 PoolManager.</li>
+  </ul></aside>
+</section>
+
+<!-- 10 -->
+<section class="slide s10">
+  <div class="kicker">Tenure</div>
+  <h2>Autonomy that has to be earned</h2>
+  <div class="cols">
+    <div class="card"><div class="w">Scorecards</div><b>tell you after the damage.</b></div>
+    <div class="card"><div class="w">Guardians</div><b>need someone awake.</b></div>
+    <div class="card t"><div class="w">Tenure</div><b>acts automatically, at the moment of every decision.</b></div>
+  </div>
+  <div class="links">
+    <div><span>Code</span>github.com/Cephei18/tenure</div>
+    <div><span>Tenure Lab</span><span style="display:inline;letter-spacing:0;text-transform:none;font-size:36px;font-weight:700;color:var(--accent)">cephei18.github.io/tenure</span></div>
+  </div>
+  <div class="thanks">Thank you.</div>
+  <div class="foot"><span>Tenure · UHI11</span><span>10</span></div>
+  <aside class="notes"><ul>
+    <li>Scorecards tell you after the damage. Guardians need someone awake.</li>
+    <li>Tenure acts automatically, at the moment of every decision.</li>
+    <li>Code and the live Lab are linked here. Thank you.</li>
+  </ul></aside>
+</section>
+
+</div>
+<script>
+(() => {
+  const slides = [...document.querySelectorAll(".slide")];
+  const stage = document.getElementById("stage");
+  let i = 0;
+  function fit() {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle("active", k === i));
+    if (location.hash !== "#" + (i + 1)) history.replaceState(null, "", "#" + (i + 1));
+  }
+  addEventListener("keydown", (e) => {
+    if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].includes(e.key)) { show(i + 1); e.preventDefault(); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].includes(e.key)) { show(i - 1); e.preventDefault(); }
+    else if (e.key === "Home") show(0);
+    else if (e.key === "End") show(slides.length - 1);
+    else if (e.key === "n" || e.key === "N") document.body.classList.toggle("show-notes");
+    else if (e.key === "f" || e.key === "F") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+  });
+  addEventListener("click", (e) => { if (e.clientX > innerWidth / 3) show(i + 1); else show(i - 1); });
+  addEventListener("resize", fit);
+  addEventListener("hashchange", () => show((parseInt(location.hash.slice(1), 10) || 1) - 1));
+  fit();
+  show((parseInt(location.hash.slice(1), 10) || 1) - 1);
+})();
+</script>
+</body>
+</html>
