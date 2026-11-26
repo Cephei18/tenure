@@ -15,12 +15,25 @@ relayed that FROZEN to vault B. All txs are on Unichain Sepolia (chain 1301). St
 |---|---|---:|---|---|
 | 1 | `requestRestore(A)` | 68,836,944 | [`0x1fa6170a...a443ae`](https://sepolia.uniscan.xyz/tx/0x1fa6170ab1c2179ee8a1abdf6a72ebbdb0de6e5655dc29f5bd722efd79a443ae) | `RestoreRequested` |
 | 2 | `restore(A)` (608 blocks later; timelock 600) | 68,837,552 | [`0x2c73d02b...61b2a`](https://sepolia.uniscan.xyz/tx/0x2c73d02bbec5774e33e4247019255435443656faf56fa34aff0037f1d6961b2a) | `TierChanged(A, FROZEN, RESTRICTED)`, `Restored` |
-| 3 | `DemoDirector.tick()`: curator parks | 68,837,588 | [`0x7c07e27e...499af`](https://sepolia.uniscan.xyz/tx/0x7c07e27e289238a25251e461b8cc7510085b60bc52637594fbbf2049dce499af) | rebalance session, `RebalanceScored` |
-| 4 | `DemoDirector.tick()`: attack round | 68,837,703 | [`0x586fd4af...6c1e`](https://sepolia.uniscan.xyz/tx/0x586fd4af5bf18768197530ce3cf411a3649e00238b9470ae65a648f6d7bb6c1e) | `MarkoutSettled`, rebalance session, `RebalanceScored` |
-| 5 | `settleMany(A, [6, 7])` | 68,837,823 | [`0xd31fd9de...69051`](https://sepolia.uniscan.xyz/tx/0xd31fd9de3c171b1d174253ca8d7f5e81c1a4ff36a5be6608ce8629c71d469051) | `MarkoutSettled`, `TierChanged(A, RESTRICTED, FROZEN)` |
-| 6 | Relay: callback proxy -> `TenureFreezeReceiver` -> vault B | 68,837,825 | [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696) | `FreezeRelayed(B, 1301, A)` |
+| 3 | `DemoDirector.tick()`: curator parks (**verified**) | 68,837,588 | [`0x7c07e27e...499af`](https://sepolia.uniscan.xyz/tx/0x7c07e27e289238a25251e461b8cc7510085b60bc52637594fbbf2049dce499af) | rebalance session, `RebalanceScored` |
+| 4 | `DemoDirector.tick()`: attack round 3 (**verified**) | 68,837,703 | [`0x586fd4af...6c1e`](https://sepolia.uniscan.xyz/tx/0x586fd4af5bf18768197530ce3cf411a3649e00238b9470ae65a648f6d7bb6c1e) | `MarkoutSettled`, rebalance session, `RebalanceScored` |
+| 5 | `settleMany(A, [6, 7])`: **Unichain freeze** | 68,837,823 | [`0xd31fd9de...69051`](https://sepolia.uniscan.xyz/tx/0xd31fd9de3c171b1d174253ca8d7f5e81c1a4ff36a5be6608ce8629c71d469051) | `MarkoutSettled`, `TierChanged(A, RESTRICTED, FROZEN)` |
+| 6 | **Lasna reaction**: `0x8888` -> `TenureFreezeRC.react()` | Lasna 9,291,302 | [`0x40e3a5e7...68c3ed`](https://lasna.reactscan.net/tx/0x40e3a5e7e3184993eccf23c3c7d1bc6459e4ace17beefd5c9a274fc22368c3ed) | RC: `FreezeRelayRequested(1301, 1301, vault B)`; `0x8888`: callback request to chain 1301, RC `0xD543...C93F` -> receiver `0x8466...E5FD` |
+| 7 | **Unichain relay**: callback proxy -> `TenureFreezeReceiver` -> vault B | 68,837,825 | [`0xede7e97d...a9696`](https://sepolia.uniscan.xyz/tx/0xede7e97dbbaa5b0a1290f479ac21b5e096d3a4ab8371c16b248a933cd44a9696) | `FreezeRelayed(B, 1301, A)` |
 
-- The relay landed **2 Unichain blocks** after the freeze (Unichain event, Lasna reaction, Unichain callback).
+Tick labels, verified by reading the director's `note()` right after each tick:
+
+- Step 3: "poisoned curator parks its range 1,500 ticks away from the price | TIER -> RESTRICTED".
+- Step 4: "ATTACK round 3: push spot -400 ticks, curator follows, arb back; attacker +133 tokens".
+
+- The relay landed **2 Unichain blocks** after the freeze: Unichain freeze (68,837,823) -> Lasna reaction
+  (9,291,302) -> Unichain relay (68,837,825).
+- I found the Lasna reaction tx by a read-only log query on Lasna. It is the only `FreezeRelayRequested` the RC
+  emitted in Lasna blocks 9,291,250-9,291,450. Its payload matches the relay (vault B, chain 1301, the new
+  receiver). Its sender was `0x038e06667e42782e571eab20432b9237f9bd6b82`, and the tx went to `0x8888`. Block
+  timestamps: Unichain freeze 1795690251, Lasna reaction 1795690250, Unichain relay 1795690253. The 1 s gap
+  between the freeze and the reaction is clock skew between the two chains, since the reaction cannot come
+  before the freeze.
 - Relay tx: from `0xF9F61C1D3325e2d4aBb55dd9e0Db84F7A0D914B0` to the callback proxy
   `0x775c9B990ADe401060B78D0e98684eEf8d2466C1`. `FreezeRelayed` is emitted by the new receiver
   `0x846698c02b01Ea6126deb50705338D812878E5FD` with topics vault B `0x68d4571Fb9720d26353F643d0B4Bc56E044F442A`,
@@ -28,7 +41,7 @@ relayed that FROZEN to vault B. All txs are on Unichain Sepolia (chain 1301). St
 - Read back afterwards: `tierOf(A) == 2` (FROZEN), vault B `relayFrozen() == true`.
 - Freeze RC on Lasna:
   [`0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F`](https://lasna.reactscan.net/address/0xD54357c1aB69b660c7211A0Dba69198F8e9cC93F)
-  (its reaction tx is listed there; its hash is not recorded here). Settler RC:
+  (reaction tx: step 6 above). Settler RC:
   [`0xfB5F3B736A5A0b5F244d629D36d876333B3FB646`](https://lasna.reactscan.net/address/0xfB5F3B736A5A0b5F244d629D36d876333B3FB646).
 - New Unichain receivers: `TenureFreezeReceiver` `0x846698c02b01Ea6126deb50705338D812878E5FD`,
   `TenureReactiveReceiver` `0xb326BE901cc39ac314b176a96176dAE0C6D0c7f0`. The legacy RCs and receivers listed in
