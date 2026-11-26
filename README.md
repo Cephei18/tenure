@@ -225,7 +225,7 @@ were fixed on `reactive-lib-omni` and are now tested by a conformance simulator 
 - **Math:** drag a range and move the prices to see holdings, NAV at the fair price, immediate leakage and markout
   alpha.
 
-The page's TypeScript math is an exact BigInt port. It matches all 1,980 differential-test vectors in
+The page's TypeScript math is an exact BigInt port. It matches all 1,992 differential-test vectors in
 `test/vectors/`. Replaying the recorded scoring events reproduces the hook's emitted budget and tier after every
 event.
 

@@ -125,7 +125,7 @@ export default function MathLab() {
       <p className="max-w-3xl text-sm text-mute">
         Drag the violet handles to choose the curator's new range. Move the pool price and the fair (oracle) price.
         Every number below is computed in your browser by an exact BigInt port of PositionValue and DecisionScore, the
-        same code checked against all 1,980 differential-test vectors. The vault starts as the headline scenario's:
+        same code checked against all 1,992 differential-test vectors. The vault starts as the headline scenario's:
         40,000 + 40,000 tokens in a ±600-tick range at price 1.
       </p>
       <Card>

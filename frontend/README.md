@@ -35,7 +35,7 @@ repo root, run `npm run abi`.
 ## Correctness
 
 - `src/math/` ports `sim/model.py`'s integer layer (which `src/libraries/*.sol` matches bit for bit) to BigInt.
-- `src/math/vectors.test.ts` checks the ports against **all 1,980 differential-test vectors** in `test/vectors/`,
+- `src/math/vectors.test.ts` checks the ports against **all 1,992 differential-test vectors** in `test/vectors/`,
   the same vectors the Solidity differential tests use, with exact equality:
 
   | File | Checked |
@@ -45,7 +45,7 @@ repo root, run `npm run abi`.
   | leakage | 240 |
   | alpha | 240 |
   | loss | 240 |
-  | budget | 300 ops |
+  | budget | 312 ops (16 sequences, incl. tier boundaries) |
   | fees | 240 |
   | chainlink | 240 |
 
