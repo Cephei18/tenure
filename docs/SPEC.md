@@ -1,12 +1,8 @@
----
-name: tenure-math
-description: Exact specification of Tenure's math — position holdings, NAV at fair price, immediate leakage, markout alpha, loss fraction, leaky-bucket risk budget, tiers and reputation — plus fixed-point, rounding and differential-testing rules. Use this skill before writing or modifying ANY math in Solidity or in sim/ Python, before generating test vectors, and whenever a numeric test disagrees between Python and Solidity.
----
-
 # Tenure math specification
 
-All formulas here are the source of truth. If code and this file disagree, fix the code (or, if this file is
-wrong, fix it and explain why in CLAUDE.md Learnings and docs/MATH.md).
+All formulas here are the source of truth: if code and this file disagree, the code is wrong. Code comments cite
+this file as `tenure-math` with a section number (for example "tenure-math 4b"). Derivations and arguments are in
+[`MATH.md`](MATH.md).
 
 ## Notation and units
 - `S` = pool sqrt price, Q64.96 (`sqrtPriceX96`). `S*` = FAIR sqrt price from the reference oracle, Q64.96.
@@ -51,10 +47,10 @@ H_cf(T)  = holdings(R_old, S_T) + I_old            // counterfactual: curator di
 alpha    = NAV(H_new(T), S*_T) - NAV(H_cf(T), S*_T)
 ```
 Negative alpha = the decision destroyed value vs doing nothing. Being picked off by an attacker shows up because the
-new range sits where spot diverges from fair. Known limitation (document it, don't hide it): S_T itself is affected by
-the curator's own liquidity (second-order), fees are excluded until M3.3 (fees in alpha).
+new range sits where spot diverges from fair. Known limitation: S_T itself is affected by
+the curator's own liquidity (second-order). LP fees are included (section 4b).
 
-## 4b. LP fees in the markout (M3.3)
+## 4b. LP fees in the markout
 Holdings include uncollected fees owed on the vault position (exactly v4's formula), in H_before, H_after and NAV.
 At settlement each side gets the fees its range earned since the record:
 ```
@@ -85,12 +81,12 @@ tier   = ratio >= 0.50e18 ? FULL : ratio >= 0.20e18 ? RESTRICTED : FROZEN
 ```
 - FROZEN is sticky: refill alone never leaves FROZEN. Only guardian `restore()` after a timelock, which sets
   `budget = bMax * 0.35` (`restoreWad = 0.35e18`, lands in RESTRICTED) — autonomy is re-earned, not restored to full.
-  ACCEPTED decision; config must keep `restrictedThreshold <= restoreWad < fullThreshold`.
+  Design decision; config must keep `restrictedThreshold <= restoreWad < fullThreshold`.
 - RESTRICTED tightens the mandate: max NAV fraction moved / 2, min range width * 2, cooldown * 2.
 - "Fraction of NAV moved" (`maxMoveWad`) = value swapped between tokens in the rebalance, as WAD of NAV_before
-  (ACCEPTED). A range move with no swap moves 0 by this measure; it is bounded instead by the max
+  (design decision). A range move with no swap moves 0 by this measure; it is bounded instead by the max
   distance-of-range-center-from-fair-price rule.
-- Suggested defaults (make them constructor/config params): `bMax0 = 0.02e18` (2% of NAV), `r` such that empty->full
+- Suggested defaults (all are config params): `bMax0 = 0.02e18` (2% of NAV), `r` such that empty->full
   takes ~1 day of blocks, `W = 50` blocks, thresholds 50% / 20%.
 
 ## 7. Reputation (pool-native)
@@ -107,7 +103,7 @@ on any loss (charge, L_imm or negative alpha):
   budget = sat_sub(min(budget, bMax'), lossWad)
 depositCap = min(capMax, cap0 + m * cumAlphaValue)
 ```
-ACCEPTED decisions:
+Design decisions:
 - Positive alpha grows `bMax` and the deposit cap but NEVER refills spent budget.
 - When bMax grows from positive alpha, scale the budget proportionally:
      budget_new = floor(budget_old * bMax_new / bMax_old)
@@ -135,6 +131,6 @@ ACCEPTED decisions:
   extreme ticks (near MIN/MAX usable), tiny and huge L, zero idle balances.
 - No floats anywhere in model core. Floats are allowed only in plotting.
 
-## Worked example to keep in docs/MATH.md
-Pick one concrete rebalance (e.g. ETH/USDC-like prices with realistic decimals), compute H_before, H_after, L_imm,
-alpha and the budget step by hand in the doc, and make one Solidity test assert those exact numbers.
+## Worked example
+Planned: one concrete rebalance (ETH/USDC-like prices, realistic decimals) with H_before, H_after, L_imm, alpha and
+the budget step computed by hand in [`MATH.md`](MATH.md), asserted exactly by a Solidity test.
