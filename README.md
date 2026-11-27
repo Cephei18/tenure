@@ -307,7 +307,7 @@ Dependencies are git submodules under `lib/`, pinned in [`foundry.lock`](foundry
 
 | Component | Source (pinned) | Used for |
 |---|---|---|
-| Uniswap v4-template | github.com/uniswapfoundation/v4-template (the project started from its scaffold; its README kept as [`docs/TEMPLATE_README.md`](docs/TEMPLATE_README.md)) | Project scaffold. Files kept from it: `script/01_CreatePoolAndAddLiquidity.s.sol`, `script/02_AddLiquidity.s.sol`, `script/03_Swap.s.sol`, `script/base/BaseScript.sol`, `script/base/LiquidityHelpers.sol`, `script/testing/00_DeployV4.s.sol`, `test/utils/BaseTest.sol`, `test/utils/Deployers.sol`, `test/utils/libraries/EasyPosm.sol` (+ test), and `LICENSE` |
+| Uniswap v4-template | github.com/uniswapfoundation/v4-template (the project started from its scaffold) | Project scaffold. Files kept from it: `script/01_CreatePoolAndAddLiquidity.s.sol`, `script/02_AddLiquidity.s.sol`, `script/03_Swap.s.sol`, `script/base/BaseScript.sol`, `script/base/LiquidityHelpers.sol`, `script/testing/00_DeployV4.s.sol`, `test/utils/BaseTest.sol`, `test/utils/Deployers.sol`, `test/utils/libraries/EasyPosm.sol` (+ test), and `LICENSE` |
 | Uniswap v4-core, v4-periphery (and their permit2, solmate, OpenZeppelin contracts) | via OpenZeppelin uniswap-hooks | PoolManager, types, libraries (`FullMath`, `TickMath`, `LiquidityAmounts`, `StateLibrary`, ...) |
 | OpenZeppelin uniswap-hooks v1.1.0 | `lib/uniswap-hooks` @ `e59fe72` | `BaseHook` |
 | hookmate | `lib/hookmate` @ `33408fb` | v4 deployment artifacts and router for tests, `HookMiner` for hook addresses |
