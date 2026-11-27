@@ -1,26 +1,57 @@
-# Compiler files
+# ---- Foundry ----
 cache/
 out/
-
-# Ignores development (and goerli) broadcast logs
+# Broadcasts: keep real deployment records (run-*.json, run-latest.json on testnets);
+# ignore local-chain runs, dry runs and lock files.
 !/broadcast
 /broadcast/*/31337/
 /broadcast/*/5/
 /broadcast/**/dry-run/
+*.recovery.lock
+# Rehearsal deployment outputs (real broadcasts write deployments/<chainId>.json, which are committed)
+deployments/*.dryrun.json
 
-
-# Dotenv file
+# ---- Env and secrets ----
 .env
+.env.*
+*.key
+*.pem
+keystore/
+keystores/
 
-# Node modules
+# ---- Node ----
 node_modules/
-.loop-logs/
-STOP
+dist/
+.vite/
+.vercel/
+.pnpm-store/
+
+# ---- Python ----
 __pycache__/
 .pytest_cache/
+*.pyc
 
-# Dry-run / rehearsal deployment outputs (real broadcasts write deployments/<chainId>.json)
-deployments/*.dryrun.json
-*.recovery.lock
-*.recovery.lock
+# ---- OS and editors ----
+.DS_Store
+Thumbs.db
+~$*
+.idea/
+.vscode/*
+!.vscode/settings.json
+
+# ---- Logs ----
+*.log
+preview.log
+
+# ---- Development tooling (kept outside the repo) ----
+CLAUDE.md
+CLAUDE.local.md
+PROMPT.md
+PLAN.md
+loop.sh
+STOP
+.claude/
+.loop-logs/
+docs/dev-log/
+docs/slides/
 tenure-kit.zip
