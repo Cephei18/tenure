@@ -76,6 +76,7 @@ Off-chain (sim/): Python reference model + test-vector generator + chart script.
 - Never edit files under lib/. Never add unpinned dependencies.
 - Keep this file under 300 lines. Put details in skills or docs/.
 - One PLAN.md task per loop iteration. Commit after each task.
+- Never add Co-Authored-By or Generated-with lines to commit messages.
 
 ## Learnings
 - Template: solc 0.8.30, cancun, OZ uniswap-hooks v1.1.0 (BaseHook at @openzeppelin/uniswap-hooks/src/base/BaseHook.sol), test base `test/utils/BaseTest.sol` (deployArtifactsAndLabel, deployCurrencyPair, deployCodeTo to flag address).
