@@ -26,7 +26,7 @@ mean of the two middle seeds, computed exactly before rounding.
 - B and C run byte-identical curator and attacker code; the test asserts that their hook settings differ only
   in `bMax0` / `bMaxCap` (`HeadlineBase._runBC`).
 
-## Seed sweep: 20 seeds (M4.2b)
+## Seed sweep: 20 seeds
 
 `test/scenario/Sweep.t.sol`; per-seed rows in `docs/results/sweep.csv`.
 
@@ -63,18 +63,18 @@ attack starting, cut attacker profit by 59% (median), and saved a median 2,771 t
 caps, while never restricting the honest curator.** Loss vs A should not be read as pure attack damage.
 
 ### Caveats
-- One attacker strategy, one pool depth, one budget setting. M5.2 probes other attacks.
+- One attacker strategy, one pool depth, one budget setting. [`THREAT_MODEL.md`](THREAT_MODEL.md) probes other attacks.
 - C's loss after freezing is bounded only for the attack; an idle vault still moves with the market.
 - On 5 seeds, two bad markouts settled in the same block, so C went FULL -> FROZEN without a sampled
   RESTRICTED block.
 
-## Headline seed 0x7e2a (M4.2)
+## Headline seed 0x7e2a
 
 `test/scenario/Headline.t.sol`; per-block NAV, budget ratio and tier in `docs/results/headline.csv`.
 A: FULL in all 600 blocks. B: 25 rounds, -4,197 vs A, attacker +1,563. C: RESTRICTED at block 160, FROZEN at
 170 after 3 rounds, -1,261 vs A, attacker +625.
 
-## Slow bleed (M1.6)
+## Slow bleed
 
 `test/scenario/SlowBleed.t.sol`; `docs/results/slow_bleed.csv`. 200 small leaks, each inside the static
 per-action cap: the static cap allows all of them; Tenure's budget restricts at action 22 and freezes at 57.

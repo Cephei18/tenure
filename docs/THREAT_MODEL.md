@@ -1,11 +1,11 @@
 # Tenure threat model
 
-Each entry: the threat, what Tenure does about it, and the test that proves it. M5.2 extends this file with the
-remaining attacks (oracle staleness and manipulation, window gaming, bypass attempts, reentrancy).
+Each entry: the threat, what Tenure does about it, and the test that proves it. Sections 6-10 cover the
+hardening pass (oracle staleness and manipulation, window gaming, bypass attempts, reentrancy).
 
-## 1. Fee masking: hiding a leak behind collected LP fees (fixed in M3.3)
+## 1. Fee masking: hiding a leak behind collected LP fees (fixed)
 
-**Threat.** Removing a v4 position collects its uncollected fees into the vault's idle balance. Before M3.3 the
+**Threat.** Removing a v4 position collects its uncollected fees into the vault's idle balance. Before the fix the
 hook valued `H_before` as position principal + idle balances only, but `H_after` saw those collected fees as idle.
 So every rebalance showed a negative leak of about the accrued fees. A poisoned curator could leak value up to the
 accrued fees in the same rebalance (for example by swapping at a manipulated price) and be charged nothing.
@@ -27,7 +27,7 @@ honest curator that re-centers more often than the markout window bled budget. T
 range's fee growth at the moment the vault leaves it and compares both sides over the observed interval
 (`test_abandonedRange_creditedExactFeesUntilExit`, `test_acceptance_honestStaysFull_500Blocks`).
 
-## 2. The real attack on a poisoned curator: park, then follow (found in M4.1)
+## 2. The real attack on a poisoned curator: park, then follow (found in the attack scenario work)
 
 **Finding.** A poisoned curator that simply "follows the market" (re-centers on pool spot) gives an attacker
 nothing. To pull spot away from fair, the attacker must trade through the vault's existing range, and the vault
@@ -45,11 +45,11 @@ distance of range center from fair, no swap, cooldown):
 **Measured** (one round, `test/scenario/ScenarioActors.t.sol::test_attacker_profitsFromPoisonedPlacement`;
 pool with 2e23 full-range third-party liquidity, vault of 40k + 40k at price 1, push of 400 ticks):
 attacker profit **+421.9 tokens** at the fair price, vault loss **446.0 tokens** (~0.56% of NAV per round).
-(In the first M4.1 version, before the poisoned curator re-balanced its inventory when parking, the same round
+(In the first version of the scenario, before the poisoned curator re-balanced its inventory when parking, the same round
 cost the vault 524.1 tokens.) Without inventory management the damage decays geometrically: each round the vault
 sells token0, so its next follow-range holds less and less (L: 1.0e24 -> 4.0e23 -> 1.1e23 over three rounds).
 
-**Headline (M4.2, 600 blocks, one seeded market, `test/scenario/Headline.t.sol`):** static caps only (run B):
+**Headline (600 blocks, one seeded market, `test/scenario/Headline.t.sol`):** static caps only (run B):
 25 rounds, vault -4,197 tokens vs. the honest run (~5% of NAV), attacker +1,563. Tenure (run C): RESTRICTED at
 block 160, FROZEN at block 170 after 3 rounds, safe mode; vault -1,261 vs. the honest run (including fees forgone
 while idle), attacker +625. B's loss grows with time; C's is capped at the freeze.
@@ -59,10 +59,10 @@ while idle), attacker +625. B's loss grows with time; C's is capped at the freez
 same spot), so immediate leakage alone does not catch it. The markout does: after W blocks the new range is
 valued at the fair price against the counterfactual of keeping the old range, and the arbitrage that bought the
 vault's token0 below fair shows up as negative alpha. That drains the risk budget, so the curator steps down
-FULL -> RESTRICTED -> FROZEN after a bounded number of rounds (headline scenario, M4.2). Any swap the curator
+FULL -> RESTRICTED -> FROZEN after a bounded number of rounds (headline scenario). Any swap the curator
 makes at the manipulated spot is additionally caught as immediate leakage.
 
-## 3. The fair-price oracle (M4.6: Chainlink adapter)
+## 3. The fair-price oracle (Chainlink adapter)
 
 Everything Tenure measures is valued at the reference price, so the oracle is part of the trust base.
 `src/ChainlinkReferencePrice.sol` turns Chainlink feeds (token0/USD and token1/USD, or one direct token0/token1 feed)
@@ -80,7 +80,7 @@ into a fair sqrtPriceX96 (`src/libraries/ChainlinkPriceLib.sol`, exact vs `sim/m
 Evidence: `test/ChainlinkReferencePrice.t.sol` (decimals 6/8/18, direct and two-feed modes, stale, negative and
 incomplete answers, set-once), `test/diff/ChainlinkPriceDiff.t.sol`.
 
-## 4. Reactive settlement relay (M4.5a)
+## 4. Reactive settlement relay
 
 `TenureSettlerRC` runs on the Reactive Network. It watches the hook's `RebalanceScored`, `MarkoutSettled` and a
 cron topic, and asks `TenureReactiveReceiver` on the hook's chain to call `hook.settleMany`. The integration adds
@@ -99,7 +99,7 @@ zero bytes to TenureHook; `test/HookSizeFrozen.t.sol` pins the hook size in both
   a fresh oracle and spot within `maxSettleDev` of fair, the same as for any keeper. No funds can move: the
   receiver can only call `settleMany`.
 
-## 5. Cross-chain freeze propagation (M4.5b)
+## 5. Cross-chain freeze propagation
 
 One curator can run Tenure-gated vaults on two chains. `TenureFreezeRC` watches `TierChanged` for that curator's
 pool on chain A and on chain B. When one side enters FROZEN, it calls `TenureFreezeReceiver` on the other chain,
@@ -136,7 +136,7 @@ TenureHook: the flag lives in the vault, and the hook size is pinned by `test/Ho
   of the test suite; a simulator must be checked against the live network, not against the library it ships
   with. Full evidence: [`INCIDENT_REACTIVE.md`](INCIDENT_REACTIVE.md).
 
-## 6. Markout window gaming (M5.2, partly open)
+## 6. Markout window gaming (partly open)
 
 **Who controls W.** The markout window is `PoolSettings.window`. It is per pool, set by the owner once in
 `registerPool`, and has no setter. The curator cannot change it, and neither can the owner after registration. A
@@ -185,18 +185,18 @@ one round.)
   arbitrageurs pull spot back within W through the vault's range, and that loss is graded. The attacker must defend
   the manipulated spot for W blocks, at its own cost.
 
-**Planned fix (M5.5, lifetime grading):** when the curator replaces a range, run a final markout from the original
+**Planned fix (lifetime grading):** when the curator replaces a range, run a final markout from the original
 decision to now and charge only the loss beyond the early W-block grade. A max horizon lets anyone force the final
 grade.
 
-**Candidate fix found in M5.2 (untested, for M5.5):** value both hypothetical holdings at the FAIR price instead of
+**Candidate fix (untested, planned with lifetime grading):** value both hypothetical holdings at the FAIR price instead of
 the settlement spot (`S := P*` in the markout). The grade would then not depend on spot at all. It equals the
 realized outcome once spot returns to fair. When spot is off fair it is a lower bound for the curator (LP holdings
 at any off-fair spot, valued at fair, are worth at least the holdings at fair; see section 8). That would close
-both the escaped last leg above and the alpha inflation in section 8. It changes the math spec (tenure-math) and
+both the escaped last leg above and the alpha inflation in section 8. It changes the math spec ([`SPEC.md`](SPEC.md)) and
 needs the Python model, new vectors and a hook-size check first.
 
-## 7. Invariants (M5.1)
+## 7. Invariants
 
 `test/invariant/TenureInvariants.t.sol`: a handler drives the whole system: deposits, withdrawals, random curator
 decisions (most break the mandate and are rejected), swaps up to 400 ticks off fair, fair-price moves, blocks
@@ -219,7 +219,7 @@ violations. The checked-in configuration uses depth 100 (about 2 minutes per pro
 `test_invariantHandler_reachesKeyStates` proves the handler reaches FROZEN, a stale oracle, a guardian restore and
 a bank run, so the campaign is not passing vacuously.
 
-## 8. Oracle and oracle-vs-spot attacks (M5.2)
+## 8. Oracle and oracle-vs-spot attacks
 
 `test/attacks/OracleAttacks.t.sol`:
 - **Stale oracle across a full markout cycle**: the curator cannot open a session, swaps keep working, a due record
@@ -239,7 +239,7 @@ a bank run, so the campaign is not passing vacuously.
   but never charged. The hook cannot tell a naive honest curator from a poisoned one: a curator that re-centers
   on a manipulated spot is charged by the markout. By design, Tenure grades outcomes, not intent.
 
-## 9. Curator bypass attempts (M5.2)
+## 9. Curator bypass attempts
 
 `test/attacks/BypassAttacks.t.sol`. All refused:
 - The curator (or anyone) calling the hook's session functions directly: `Tenure__NotVault` for all six.
@@ -251,7 +251,7 @@ a bank run, so the campaign is not passing vacuously.
 - The curator changing its mandate, restoring itself, or replacing itself: owner- or guardian-only.
 - A FROZEN curator: `rebalance` reverts `Tenure__Frozen`. Only de-risking stays open: safe mode and withdrawals.
 
-## 10. Reentrancy (M5.2)
+## 10. Reentrancy
 
 Tenure's contracts make no untrusted external calls: the hook calls only the PoolManager and the owner-set oracle.
 The realistic vector is a token with transfer callbacks, which fires INSIDE a measured rebalance.

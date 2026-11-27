@@ -1,4 +1,4 @@
-# Tenure gas report (M5.3)
+# Tenure gas report
 
 All numbers come from `test/GasReport.t.sol` under the **deploy profile** (via-IR, the build you would actually ship;
 TenureHook runtime is 22,528 B). Raw values are in `snapshots/GasReport.deploy.json`, with
@@ -86,7 +86,7 @@ slots** and about 18 rewrites:
 
 - `RebalanceRecord`: 8 new slots (old/new range, idle before/after, NAV before, block, settled flag).
 - Fee snapshots for the new record, plus exit marks on the previous record when its range is abandoned before
-  settlement (tenure-math 4b). That case is skipped if the previous record has already settled.
+  settlement ([`SPEC.md`](SPEC.md) section 4b). That case is skipped if the previous record has already settled.
 - The pending holdings snapshot (9 slots, rewritten each rebalance) and the budget state.
 - About 20 cold reads of PoolManager state (slot0, positions, fee growth) and the oracle, taken twice (before and
   after) so the hook measures independently of the curator.

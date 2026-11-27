@@ -28,4 +28,4 @@ All numbers are decimal strings (uint256/int256-safe). Each file: `{seed, count,
 - `budget.json` — 12 sequences x 25 ops with default params. kind: 0 refill, 1 charge(a=lossWad,b=lossValue),
   2 credit(a=gainWad,b=gainValue), 3 restore. charge/credit refill to `block` first. Expected state after each op.
 - `chainlink.json` — Chainlink answers + feed/token decimals (6/8/18, direct and two-feed) -> fair sqrtPriceX96,
-  or `ok: false` where Solidity must revert (non-positive answer, overflow, out of range). M4.6.
+  or `ok: false` where Solidity must revert (non-positive answer, overflow, out of range).

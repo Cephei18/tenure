@@ -1,6 +1,6 @@
 """Tenure reference model.
 
-Two layers (see .claude/skills/tenure-math/SKILL.md):
+Two layers (see docs/SPEC.md):
   * Integer layer: mirrors the Solidity code EXACTLY (floor division, explicit ceil, nested mulDiv, the same rounding
     flags as v4-core SqrtPriceMath). Test vectors are produced from this layer and Solidity must match bit-for-bit.
   * Ideal layer (`ideal_*`): exact rational arithmetic with fractions.Fraction. Used only to check that the integer

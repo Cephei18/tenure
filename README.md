@@ -242,14 +242,14 @@ event.
   realized after grading is not charged. Settlement needs spot within `maxSettleDev` of fair, so only the last
   leg escapes: 2.9% of the damage for a 400-tick attack, and all of a tiny 90-tick one. Over 20 repeated rounds the
   vault lost 0.07% of NAV while the attacker lost money on fees. A fix (lifetime grading, value at fair) is
-  planned as M5.5.
+  planned.
 - **Reputation pumping (faking a track record):** not ruled out, but bounded and capped. An accomplice who settles
   a record at the edge of the spot band gets it graded higher. The gap is bounded per record (under 0.1% of NAV,
   set by `maxSettleDev`) and capped overall (`bMaxCap`, `capMax`). THREAT_MODEL.md section 8 documents a small
   measured gap: +40 alpha for 36 cost. The `k <= 1` rule ([`docs/MATH.md`](docs/MATH.md)) guarantees that
   reputation bought with value really paid into the vault buys at most that much extra loss allowance. It does not
-  cover alpha that is recorded but not kept, which is this gap. Candidate fix: value the markout at the fair price,
-  the first item of M5.5.
+  cover alpha that is recorded but not kept, which is this gap. Candidate fix (planned): value the markout at the fair price,
+  as part of lifetime grading.
 - **Oracle:** stale or future-dated prices block sessions and settlements but never swaps or withdrawals. An honest
   curator cannot be graded down by spot manipulation at settlement.
 - **Bypass and reentrancy:** direct PoolManager calls touch only the caller's own position. Every hook and vault
@@ -264,7 +264,7 @@ event.
 - One vault per pool, one range per vault (MVP).
 - The hook is 22,528 B with via-IR, only 48 B above its own 2,000 B headroom guard. New logic must move math into
   the linked `TenureScorer` library first.
-- Window gaming and alpha inflation are bounded but open (M5.5).
+- Window gaming and alpha inflation are bounded but open (planned fix: lifetime grading).
 - Token callbacks (ERC777-style) are not supported. They cannot break the guards, but they can grade the curator
   adversely.
 - On the testnet deployment, freeze relays run one way only: from the demo vault A to vault B. Vault A is owned by
@@ -297,8 +297,9 @@ bash script/demo.sh   # terminal 2
 Testnet (Unichain Sepolia + Reactive Lasna): [`docs/DEPLOY.md`](docs/DEPLOY.md). Always deploy with
 `FOUNDRY_PROFILE=deploy`; the default profile builds a hook over the 24,576 B contract-size limit.
 
-Further reading: [`docs/MATH.md`](docs/MATH.md) (scoring math), [`docs/RESULTS.md`](docs/RESULTS.md),
-[`docs/GAS.md`](docs/GAS.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+Further reading: [`docs/SPEC.md`](docs/SPEC.md) (math specification), [`docs/MATH.md`](docs/MATH.md) (derivations),
+[`docs/RESULTS.md`](docs/RESULTS.md), [`docs/GAS.md`](docs/GAS.md), [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+Pitch deck: [`docs/Tenure_UHI11_deck.pdf`](docs/Tenure_UHI11_deck.pdf).
 
 ## Credits and third-party code
 
@@ -306,7 +307,7 @@ Dependencies are git submodules under `lib/`, pinned in [`foundry.lock`](foundry
 
 | Component | Source (pinned) | Used for |
 |---|---|---|
-| Uniswap v4-template | github.com/uniswapfoundation/v4-template (initial commit `b8fde17`; its README kept as [`docs/TEMPLATE_README.md`](docs/TEMPLATE_README.md)) | Project scaffold. Files kept from it: `script/01_CreatePoolAndAddLiquidity.s.sol`, `script/02_AddLiquidity.s.sol`, `script/03_Swap.s.sol`, `script/base/BaseScript.sol`, `script/base/LiquidityHelpers.sol`, `script/testing/00_DeployV4.s.sol`, `test/utils/BaseTest.sol`, `test/utils/Deployers.sol`, `test/utils/libraries/EasyPosm.sol` (+ test), and `LICENSE` |
+| Uniswap v4-template | github.com/uniswapfoundation/v4-template (the project started from its scaffold; its README kept as [`docs/TEMPLATE_README.md`](docs/TEMPLATE_README.md)) | Project scaffold. Files kept from it: `script/01_CreatePoolAndAddLiquidity.s.sol`, `script/02_AddLiquidity.s.sol`, `script/03_Swap.s.sol`, `script/base/BaseScript.sol`, `script/base/LiquidityHelpers.sol`, `script/testing/00_DeployV4.s.sol`, `test/utils/BaseTest.sol`, `test/utils/Deployers.sol`, `test/utils/libraries/EasyPosm.sol` (+ test), and `LICENSE` |
 | Uniswap v4-core, v4-periphery (and their permit2, solmate, OpenZeppelin contracts) | via OpenZeppelin uniswap-hooks | PoolManager, types, libraries (`FullMath`, `TickMath`, `LiquidityAmounts`, `StateLibrary`, ...) |
 | OpenZeppelin uniswap-hooks v1.1.0 | `lib/uniswap-hooks` @ `e59fe72` | `BaseHook` |
 | hookmate | `lib/hookmate` @ `33408fb` | v4 deployment artifacts and router for tests, `HookMiner` for hook addresses |
@@ -329,4 +330,4 @@ scoring, budget and position-value libraries, the Reactive contracts), the deplo
 ## How it was built
 
 Developed with AI-assisted tooling (Claude Code) under the author's direction; design decisions, testnet
-deployment and verification by the author. Build logs: [`docs/dev-log/`](docs/dev-log/).
+deployment and verification by the author.

@@ -154,7 +154,7 @@ No. Do not spend lREACT on them:
   `0x...fffFfF` reports. Nothing else can move funds out.
 - The old Unichain receivers (0.002 ETH each, stranded the same way) reject every current callback (point 3).
 
-## Code fix (this commit)
+## Code fix
 
 - `lib/reactive-lib-omni` pinned at `3ade0dcf1d27e67e5783ef807e73a1b9e0c0cce8` (the official current base,
   remapped `reactive-lib-omni/`). The legacy `reactive-lib` stays in `lib/`, used only by the regression test.

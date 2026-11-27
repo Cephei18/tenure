@@ -1,9 +1,9 @@
 # Tenure math
 
-The specification lives in `.claude/skills/tenure-math/SKILL.md`. This file holds derivations and arguments.
-Full derivations and the worked numeric example are added in M6.2.
+The specification lives in [`SPEC.md`](SPEC.md) (cited in code as `tenure-math`). This file holds derivations and
+arguments. Planned: full derivations and a worked numeric rebalance example.
 
-## Reputation: proportional budget scaling and the pump bound (M2.6)
+## Reputation: proportional budget scaling and the pump bound
 
 ### Rule
 When a settled rebalance shows positive alpha `g` (as a WAD fraction of NAV), reputation grows:
@@ -21,7 +21,7 @@ upward. The tier is kept rather than recomputed so the 1-wei floor cannot demote
 threshold either.
 
 The previous rule added the new headroom to the budget (`budget += bMax' - bMax`). That preserves the deficit
-but raises the ratio, so positive alpha alone could promote RESTRICTED -> FULL. M2.6 replaced it.
+but raises the ratio, so positive alpha alone could promote RESTRICTED -> FULL. The current rule replaced it.
 
 ### Why k <= 1 (the pump bound)
 Attack: an attacker who controls (or has poisoned) the curator pays the vault `X` of value, for example by trading
@@ -43,7 +43,7 @@ into the vault and kept there), net extractable value does not increase. Two eff
 the attacker: losses first reduce `cumAlphaWad`, so bleeding shrinks `bMax` back toward its old value while the
 budget is drained; and every rounding step (`floor` scaling, `ceil` loss) is curator-adverse.
 
-**Scope: the bound does not cover alpha that is recorded but not kept.** M5.2 found such a case
+**Scope: the bound does not cover alpha that is recorded but not kept.** The hardening pass found such a case
 (`docs/THREAT_MODEL.md` section 8). An accomplice pushes pool spot to the edge of the settlement band
 (`maxSettleDev`) and settles there. The markout values the positions at that spot, so it records positive alpha.
 The value behind it goes back out when spot returns to fair, and the accomplice's cost goes mostly to
@@ -52,8 +52,8 @@ So the premise above does not hold and faking a track record is not ruled out. I
 - per record, by `maxSettleDev` (asserted under 0.1% of NAV in the test);
 - overall, by `bMaxCap` and `capMax`.
 
-The candidate fix, valuing the markout's hypothetical holdings at the fair price instead of at spot, is the first
-item of M5.5. It would make every recorded alpha a value the vault keeps, which restores the premise.
+The candidate fix, valuing the markout's hypothetical holdings at the fair price instead of at spot, is
+planned as part of lifetime grading. It would make every recorded alpha a value the vault keeps, which restores the premise.
 
 With `k > 1` the inequality breaks: paying `X` buys up to `k * X` of loss allowance, and pumping is profitable.
 `RiskBudget.validate` (called by `TenureHook.registerPool`) therefore reverts with
@@ -75,7 +75,7 @@ produced. The settlement-spot gap above is measured in
 - `test/TenureHook.t.sol::test_register_reputationGainAboveOne_reverts`: the hook rejects `k = 1e18 + 1`.
 - `sim/test_model.py::test_pump_never_profitable`: the same property in the Python reference model.
 
-## LP fees in the markout (M3.3)
+## LP fees in the markout
 
 Without fees, honest liquidity provision scores as pure impermanent loss against the counterfactual, so an honest
 curator would bleed budget simply for doing its job. Each side of the markout is therefore credited the fees its
@@ -94,7 +94,7 @@ abandoned old range would in truth have gone out of range; it never favors the c
 Evidence: `test/diff/DecisionScoreDiff.t.sol::test_diff_feesAlpha` (240 vectors, exact),
 `test/TenureHookFees.t.sol` (exactness vs v4's owed fees, exit snapshot, fallback, 500-block honest run).
 
-## Fair price from Chainlink feeds (M4.6)
+## Fair price from Chainlink feeds
 
 With `a0` the token0 answer (fd0 decimals) and `a1` the token1 answer (fd1 decimals) in a common quote, and token
 decimals dec0 and dec1, the raw pool price (token1 base units per token0 base unit) is
